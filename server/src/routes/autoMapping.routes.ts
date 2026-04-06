@@ -3,7 +3,7 @@ import { sessionAuth } from '../middleware/sessionAuth'
 import { FtpService } from '../services/ftp.service'
 import { ConfigStoreService } from '../services/configStore.service'
 import { runAutoMapping } from '../services/autoMapping.service'
-import { AutoMappingEvent } from '@smartpulse-intl/shared'
+import { AutoMappingEvent, GroupProfile, DEFAULT_POLLING_CONFIG } from '@smartpulse-intl/shared'
 
 export function createAutoMappingRoutes(
   ftpService: FtpService,
@@ -15,11 +15,15 @@ export function createAutoMappingRoutes(
   router.post('/run', sessionAuth, async (req, res) => {
     const session = req.session.portalSession!
 
-    // Load current group profile
-    const profile = await configStore.loadGroupProfile(String(session.groupId))
-    if (!profile) {
-      res.status(400).json({ code: 'NO_PROFILE', message: 'Group profile not found' })
-      return
+    // Load current group profile; fall back to empty profile when none exists yet
+    const profile: GroupProfile = (await configStore.loadGroupProfile(String(session.groupId))) ?? {
+      id: String(session.groupId),
+      name: '',
+      portalEnv: 'prod',
+      assetMapping: { companies: [], ftpDirection: 'incoming', ftpFilename: '' },
+      polling: DEFAULT_POLLING_CONFIG,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }
 
     // Set SSE headers
