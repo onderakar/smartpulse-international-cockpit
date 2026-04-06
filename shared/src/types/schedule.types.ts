@@ -3,7 +3,7 @@ import { AssetMapping } from './assetMapping.types';
 
 export const SCHEDULE_POLLING_INTERVAL_SECONDS = 30;
 
-export const DEFAULT_SCHEDULE_FILE_PATTERN = 'Battery_Schedule_{UEVCB_ID}.csv';
+export const DEFAULT_SCHEDULE_FILE_PATTERN = 'Battery_Schedule_{GCP_ID}.csv';
 
 export const SCHEDULE_CSV_COLUMNS = [
   'Delivery_Start',
@@ -83,9 +83,9 @@ export interface ScheduleSlotRevision {
   source?: 'ftp' | 'user_save';
 }
 
-/** Per-plant per-day revision store entry */
+/** Per-GCP per-day revision store entry */
 export interface ScheduleRevisionStore {
-  uevcbPlantId: number;
+  gcpId: number;
   dateKey: string;
   slots: Record<string, ScheduleSlotRevision[]>; // Now maps to an array of revisions!
   lastFetchedAt: number;
@@ -114,47 +114,47 @@ export interface ScheduleChartData {
 
 /** Context for resolving schedule filename template placeholders */
 export interface ScheduleFileContext {
-  uevcbId: number;       // UEVCB's primaryPortalPlantId
-  assetId?: number;      // Component's portalPlantId
-  scheduleId?: string;   // Component's scheduleId
-  uevcbName?: string;    // UEVCB's name
+  gcpId: number;          // GridConnectionPoint's id
+  assetId?: number;       // Component's portalPlantId
+  scheduleId?: string;    // Component's scheduleId
+  gcpName?: string;       // GridConnectionPoint's name
 }
 
 /** Resolve a schedule filename pattern with context variables */
 export function resolveScheduleFilename(pattern: string, ctx: ScheduleFileContext): string {
   return pattern
-    .replace(/\{UEVCB_ID\}/g, String(ctx.uevcbId))
-    .replace(/\{ASSET_ID\}/g, String(ctx.assetId ?? ctx.uevcbId))
-    .replace(/\{SCHEDULE_ID\}/g, ctx.scheduleId ?? String(ctx.uevcbId))
-    .replace(/\{UEVCB_NAME\}/g, ctx.uevcbName ?? '');
+    .replace(/\{GCP_ID\}/g, String(ctx.gcpId))
+    .replace(/\{ASSET_ID\}/g, String(ctx.assetId ?? ctx.gcpId))
+    .replace(/\{SCHEDULE_ID\}/g, ctx.scheduleId ?? String(ctx.gcpId))
+    .replace(/\{GCP_NAME\}/g, ctx.gcpName ?? '');
 }
 
-/** Build the FTP filename for a given UEVCB portal plant ID (backward compat) */
-export function getScheduleFilename(primaryPortalPlantId: number): string {
-  return resolveScheduleFilename(DEFAULT_SCHEDULE_FILE_PATTERN, { uevcbId: primaryPortalPlantId });
+/** Build the FTP filename for a given GCP id */
+export function getScheduleFilename(gcpId: number): string {
+  return resolveScheduleFilename(DEFAULT_SCHEDULE_FILE_PATTERN, { gcpId });
 }
 
 /** Resolve the schedule filename from the asset mapping config, falling back to default */
 export function getScheduleFilenameFromMapping(
   mapping: AssetMapping | null | undefined,
-  plantId: number,
+  gcpId: number,
 ): string {
   if (mapping?.companies) {
     for (const company of mapping.companies) {
-      for (const uevcb of company.uevcbs) {
-        if (uevcb.primaryPortalPlantId === plantId) {
-          const bessComp = uevcb.components.find(c => c.type === 'BESS');
+      for (const gcp of company.gridConnectionPoints) {
+        if (gcp.id === gcpId) {
+          const bessComp = gcp.components.find(c => c.type === 'BESS');
           if (bessComp?.scheduleFilePattern) {
             return resolveScheduleFilename(bessComp.scheduleFilePattern, {
-              uevcbId: uevcb.primaryPortalPlantId,
+              gcpId: gcp.id,
               assetId: bessComp.portalPlantId,
               scheduleId: bessComp.scheduleId,
-              uevcbName: uevcb.name,
+              gcpName: gcp.name,
             });
           }
         }
       }
     }
   }
-  return resolveScheduleFilename(DEFAULT_SCHEDULE_FILE_PATTERN, { uevcbId: plantId });
+  return resolveScheduleFilename(DEFAULT_SCHEDULE_FILE_PATTERN, { gcpId });
 }
