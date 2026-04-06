@@ -8,7 +8,7 @@ export interface CacheSummaryEntry {
 
 interface CachedDayRecord {
   cacheKey: string;
-  uevcbName: string;
+  gcpName: string;
   dateKey: string;
   data: LiveMonitoringData;
   cachedAt: number;
@@ -16,7 +16,7 @@ interface CachedDayRecord {
 }
 
 const DB_NAME = 'smartpulse-monitoring-cache';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'monitoring-days';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -25,11 +25,16 @@ function getDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         const store = db.createObjectStore(STORE_NAME, { keyPath: 'cacheKey' });
-        store.createIndex('uevcbName', 'uevcbName', { unique: false });
+        store.createIndex('gcpName', 'gcpName', { unique: false });
+      } else {
+        // Upgrade from v1: delete old store and recreate (cache is ephemeral)
+        db.deleteObjectStore(STORE_NAME);
+        const store = db.createObjectStore(STORE_NAME, { keyPath: 'cacheKey' });
+        store.createIndex('gcpName', 'gcpName', { unique: false });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -38,9 +43,9 @@ function getDb(): Promise<IDBDatabase> {
   return dbPromise;
 }
 
-function buildKey(uevcbName: string, dateKey: string, groupId?: string | number): string {
+function buildKey(gcpName: string, dateKey: string, groupId?: string | number): string {
   const prefix = groupId ? `${groupId}:` : '';
-  return `${prefix}${uevcbName}:${dateKey}`;
+  return `${prefix}${gcpName}:${dateKey}`;
 }
 
 function countPoints(data: LiveMonitoringData): number {
@@ -53,7 +58,7 @@ function countPoints(data: LiveMonitoringData): number {
 }
 
 async function getCachedDay(
-  uevcbName: string,
+  gcpName: string,
   dateKey: string,
   groupId?: string | number,
 ): Promise<LiveMonitoringData | null> {
@@ -62,7 +67,7 @@ async function getCachedDay(
     return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
-      const req = store.get(buildKey(uevcbName, dateKey, groupId));
+      const req = store.get(buildKey(gcpName, dateKey, groupId));
       req.onsuccess = () => {
         const record = req.result as CachedDayRecord | undefined;
         resolve(record?.data ?? null);
@@ -75,7 +80,7 @@ async function getCachedDay(
 }
 
 async function putCachedDay(
-  uevcbName: string,
+  gcpName: string,
   dateKey: string,
   data: LiveMonitoringData,
   groupId?: string | number,
@@ -83,8 +88,8 @@ async function putCachedDay(
   try {
     const db = await getDb();
     const record: CachedDayRecord = {
-      cacheKey: buildKey(uevcbName, dateKey, groupId),
-      uevcbName,
+      cacheKey: buildKey(gcpName, dateKey, groupId),
+      gcpName,
       dateKey,
       data,
       cachedAt: Date.now(),
@@ -102,14 +107,14 @@ async function putCachedDay(
   }
 }
 
-async function listCachedDays(uevcbName: string): Promise<CacheSummaryEntry[]> {
+async function listCachedDays(gcpName: string): Promise<CacheSummaryEntry[]> {
   try {
     const db = await getDb();
     return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
-      const index = store.index('uevcbName');
-      const range = IDBKeyRange.only(uevcbName);
+      const index = store.index('gcpName');
+      const range = IDBKeyRange.only(gcpName);
       const entries: CacheSummaryEntry[] = [];
 
       const req = index.openCursor(range);
@@ -135,14 +140,14 @@ async function listCachedDays(uevcbName: string): Promise<CacheSummaryEntry[]> {
   }
 }
 
-async function clearCachedDaysForUevcb(uevcbName: string): Promise<number> {
+async function clearCachedDaysForGcp(gcpName: string): Promise<number> {
   try {
     const db = await getDb();
     return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
-      const index = store.index('uevcbName');
-      const range = IDBKeyRange.only(uevcbName);
+      const index = store.index('gcpName');
+      const range = IDBKeyRange.only(gcpName);
       let count = 0;
 
       const req = index.openCursor(range);
@@ -182,6 +187,6 @@ export const monitoringCache = {
   getCachedDay,
   putCachedDay,
   listCachedDays,
-  clearCachedDaysForUevcb,
+  clearCachedDaysForGcp,
   clearAllCachedDays,
 };

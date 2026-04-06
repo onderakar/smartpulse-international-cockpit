@@ -11,7 +11,7 @@ import {
 import { useProfile } from './ProfileContext';
 import { useMonitoring } from './MonitoringContext';
 import { useAuth } from './AuthContext';
-import { getFirstUevcb, getAllUevcbs } from '@shared/types/assetMapping.types';
+import { getAllGcps } from '@shared/types/assetMapping.types';
 import { MetricDataPoint, FORECAST_COLORS } from '@smartpulse-intl/shared';
 import { ForecastResponse } from '@smartpulse-intl/shared';
 import { forecastApi } from '../api/forecast.api';
@@ -21,7 +21,7 @@ import type { ForecastSeriesItem } from '../components/widgets/LiveMonitoringWid
 const FORECAST_POLL_INTERVAL_MS = 15 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
-// Cache — keyed by "uevcbId::dateKey" so data is reused across screens
+// Cache — keyed by "gcpId::dateKey" so data is reused across screens
 // ---------------------------------------------------------------------------
 
 interface CachedForecastData {
@@ -33,8 +33,8 @@ interface CachedForecastData {
 
 const forecastCache = new Map<string, CachedForecastData>();
 
-function buildCacheKey(uevcbId: string, dateKey: string): string {
-  return `${uevcbId}::${dateKey}`;
+function buildCacheKey(gcpId: string, dateKey: string): string {
+  return `${gcpId}::${dateKey}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -42,7 +42,7 @@ function buildCacheKey(uevcbId: string, dateKey: string): string {
 // ---------------------------------------------------------------------------
 
 interface ForecastContextValue {
-  /** Forecast series for the active UEVCB + selected date */
+  /** Forecast series for the active GCP + selected date */
   forecastSeries: ForecastSeriesItem[];
   /** True while a fetch is in progress */
   loading: boolean;
@@ -108,12 +108,12 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
   const { selectedDate } = useMonitoring();
 
   const mapping = profile?.assetMapping ?? null;
-  const allUevcbs = useMemo(() => getAllUevcbs(mapping), [mapping]);
-  const activeUevcb = allUevcbs[0] ?? getFirstUevcb(mapping);
+  const allGcps = useMemo(() => getAllGcps(mapping), [mapping]);
+  const activeGcp = allGcps[0] ?? null;
 
   const companyId = companies.length > 0 ? companies[0].id : null;
 
-  const tz = activeUevcb?.timezone || 'UTC';
+  const tz = activeGcp?.timezone || 'UTC';
   const dateKey = useMemo(
     () => selectedDate.toLocaleDateString('en-CA', { timeZone: tz }),
     [selectedDate, tz],
@@ -131,16 +131,16 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
   const refetch = useMemo(() => () => setRefetchCount(c => c + 1), []);
 
   useEffect(() => {
-    if (!companyId || !activeUevcb) {
+    if (!companyId || !activeGcp) {
       setForecastSeries([]);
       return;
     }
 
-    const uevcbId = activeUevcb.uevcbId ?? activeUevcb.name;
+    const gcpId = String(activeGcp.id);
 
     // Check cache first (skip on explicit refetch)
     if (refetchCount === 0) {
-      const cacheKey = buildCacheKey(uevcbId, dateKey);
+      const cacheKey = buildCacheKey(gcpId, dateKey);
       const cached = forecastCache.get(cacheKey);
       if (cached) {
         setForecastSeries(cached.series);
@@ -166,7 +166,7 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
     const requests: { label: string; promise: Promise<ForecastResponse> }[] = [];
 
     // Component forecasts
-    for (const comp of activeUevcb.components) {
+    for (const comp of activeGcp.components) {
       if (comp.forecastPreference?.sourceName && comp.portalPlantId > 0) {
         requests.push({
           label: `${comp.displayName} Forecast`,
@@ -183,21 +183,6 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
         });
       }
     }
-
-    // UEVCB-level FinalForecast
-    requests.push({
-      label: `${activeUevcb.name} Forecast`,
-      promise: forecastApi.getValues({
-        companyId,
-        powerPlantId: activeUevcb.primaryPortalPlantId,
-        provider: 'FinalForecast',
-        startDate: dayStr,
-        endDate: dayStr,
-        minute: 0,
-        hour: '12:30',
-        columnId: [6, 7, 10, 1, 2, 3, 4, 11, 12, 13, 14],
-      }),
-    });
 
     Promise.allSettled(requests.map(r => r.promise)).then(results => {
       if (fetchId !== fetchIdRef.current) return; // stale
@@ -249,8 +234,26 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
         }
       });
 
+      // Aggregate component forecasts into a GCP total series when more than one
+      if (series.length > 1) {
+        const aggregateMap = new Map<number, number>();
+        for (const s of series) {
+          for (const pt of s.data) {
+            aggregateMap.set(pt.timestamp, (aggregateMap.get(pt.timestamp) ?? 0) + pt.value);
+          }
+        }
+        const aggregateData = [...aggregateMap.entries()]
+          .sort((a, b) => a[0] - b[0])
+          .map(([timestamp, value]) => ({ timestamp, value }));
+        series.unshift({
+          label: `${activeGcp.name} Total`,
+          data: aggregateData,
+          color: FORECAST_COLORS[series.length % FORECAST_COLORS.length],
+        });
+      }
+
       // Store in cache (including KGUP/OSOS data)
-      const cacheKey = buildCacheKey(uevcbId, dateKey);
+      const cacheKey = buildCacheKey(gcpId, dateKey);
       forecastCache.set(cacheKey, {
         series,
         ilkKgup: foundIlkKgup,
@@ -266,7 +269,7 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
     });
 
     return () => { fetchIdRef.current++; }; // cancel stale
-  }, [companyId, activeUevcb, dateKey, tz, refetchCount]);
+  }, [companyId, activeGcp, dateKey, tz, refetchCount]);
 
   const value = useMemo<ForecastContextValue>(
     () => ({ forecastSeries, ilkKgupData, rkgupData, ososData, loading, refetch }),

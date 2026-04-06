@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useProfile } from '../../context/ProfileContext';
 import { useLocale } from '../../context/LocaleContext';
-import { getFirstUevcb } from '@shared/types/assetMapping.types';
+import { getFirstGcp } from '@shared/types/assetMapping.types';
 import { monitoringApi } from '../../api/monitoring.api';
 import { monitoringCache } from '../../services/monitoringCache';
 import toast from 'react-hot-toast';
@@ -10,7 +10,7 @@ export function CacheManagement() {
   const { profile } = useProfile();
   const { t } = useLocale();
   const mapping = profile?.assetMapping;
-  const uevcb = getFirstUevcb(mapping);
+  const gcp = getFirstGcp(mapping);
 
   const [currentMonth, setCurrentMonth] = useState(() => {
     const d = new Date();
@@ -34,23 +34,33 @@ export function CacheManagement() {
   };
 
   const handleSync = async (dateStr: string) => {
-    if (!uevcb?.primaryPortalPlantId) return;
+    if (!gcp?.id) return;
 
     const companyMatch = mapping?.companies?.find((c: any) =>
-      c.uevcbs.some((u: any) => (u.uevcbId || u.id) === (uevcb.uevcbId || (uevcb as any).id))
+      c.gridConnectionPoints.some((u: any) => u.id === gcp.id)
     );
-    const companyId = companyMatch?.companyId || (companyMatch as any)?.id || 0;
+    const companyId = companyMatch?.companyId || 0;
 
     setSyncStatus('syncing');
     setSyncingDate(dateStr);
 
     try {
-      // Force UTC+3 boundary matching for the day instead of browser local
-      const start = new Date(`${dateStr}T00:00:00.000+03:00`);
-      const end = new Date(`${dateStr}T23:59:59.999+03:00`);
+      // Compute dynamic timezone offset from the GCP's timezone (DST-aware)
+      const now = new Date();
+      const utcStr = now.toLocaleString('en-US', { timeZone: 'UTC' });
+      const tzStr = now.toLocaleString('en-US', { timeZone: gcp.timezone || 'UTC' });
+      const tzOffsetMs = new Date(tzStr).getTime() - new Date(utcStr).getTime();
+      const tzOffsetHours = tzOffsetMs / 3600000;
+      const sign = tzOffsetHours >= 0 ? '+' : '-';
+      const absHours = String(Math.floor(Math.abs(tzOffsetHours))).padStart(2, '0');
+      const absMinutes = String(Math.round((Math.abs(tzOffsetHours) % 1) * 60)).padStart(2, '0');
+      const offsetStr = `${sign}${absHours}:${absMinutes}`;
+
+      const start = new Date(`${dateStr}T00:00:00.000${offsetStr}`);
+      const end = new Date(`${dateStr}T23:59:59.999${offsetStr}`);
 
       await monitoringApi.refetchLiveMetricsDay(
-        uevcb.primaryPortalPlantId,
+        gcp.id,
         companyId,
         start.toISOString(),
         end.toISOString()
@@ -107,7 +117,7 @@ export function CacheManagement() {
             <i className="ri-loader-4-line text-5xl text-primary-500 animate-spin mb-4" />
             <h3 className="text-xl font-bold text-white mb-2 tracking-wide">{t('cache.refetchingTitle')}</h3>
             <p className="text-gray-400 text-center text-sm">
-              <strong>{syncingDate}</strong> (UTC+3) {t('cache.refetchingDesc')}
+              <strong>{syncingDate}</strong> ({gcp?.timezone || 'UTC'}) {t('cache.refetchingDesc')}
             </p>
           </div>
         </div>
@@ -135,7 +145,7 @@ export function CacheManagement() {
           </button>
         </div>
 
-        {!uevcb ? (
+        {!gcp ? (
           <p className="text-gray-500 text-sm">{t('cache.noMapping')}</p>
         ) : (
           <div className="bg-dark-700 p-4 rounded-lg border border-gray-600 max-w-sm">

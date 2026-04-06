@@ -6,7 +6,7 @@ import { useSocStaleRule, AlertRuleContext } from './alertRules/socStaleRule';
 import { useChargeStateChangeRule } from './alertRules/chargeStateChangeRule';
 import { useBapDirectionMismatchRule } from './alertRules/bapDirectionMismatchRule';
 import { useScheduleData } from './useScheduleData';
-import { getFirstUevcb } from '@shared/types/assetMapping.types';
+import { getFirstGcp } from '@shared/types/assetMapping.types';
 
 /**
  * Alert engine — runs all alert rules against live monitoring data.
@@ -18,10 +18,10 @@ export function useAlertEngine() {
   const { addAlert, clearByRule, alerts } = useAlerts();
 
   const mapping = profile?.assetMapping ?? null;
-  const uevcb = useMemo(() => getFirstUevcb(mapping), [mapping]);
-  const tz = uevcb?.timezone || 'UTC';
+  const gcp = useMemo(() => getFirstGcp(mapping), [mapping]);
+  const tz = gcp?.timezone || 'UTC';
 
-  const schedulePlantId = uevcb?.primaryPortalPlantId ?? null;
+  const schedulePlantId = gcp?.id ?? null;
   const scheduleDateKey = useMemo(
     () => selectedDate.toLocaleDateString('en-CA', { timeZone: tz }),
     [selectedDate, tz],

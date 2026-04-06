@@ -1,7 +1,7 @@
 import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
 import { useLocale } from '../../context/LocaleContext';
-import { getFirstUevcb } from '@shared/types/assetMapping.types';
+import { getFirstGcp } from '@shared/types/assetMapping.types';
 import { Link, useLocation } from 'react-router-dom';
 import { AlertBell } from './AlertBell';
 
@@ -10,7 +10,7 @@ export function Header() {
   const { profile } = useProfile();
   const { locale, setLocale, t } = useLocale();
   const location = useLocation();
-  const activeUevcb = getFirstUevcb(profile?.assetMapping);
+  const activeGcp = getFirstGcp(profile?.assetMapping);
 
   const isActive = (path: string) =>
     location.pathname === path ? 'text-primary-400 border-b-2 border-primary-400' : 'text-gray-400 hover:text-gray-200';
@@ -65,9 +65,9 @@ export function Header() {
           </button>
         </div>
         <AlertBell />
-        {activeUevcb && (
+        {activeGcp && (
           <span className="text-xs text-gray-400 bg-dark-700 px-3 py-1 rounded-full">
-            {activeUevcb.name}
+            {activeGcp.name}
           </span>
         )}
         <button
