@@ -423,6 +423,31 @@ const T = {
   'settings.importParseError': { tr: 'Dosya okunamadi', en: 'Could not read file' },
   'settings.mappingDeleteBlocked': { tr: 'Mevcut mapping silinemez. Sirketleri tek tek kaldirin.', en: 'Cannot clear existing mapping. Remove companies individually.' },
   'settings.importConfirmMapping': { tr: 'Bu islem mevcut asset mapping ayarlarini degistirecek. Devam etmek istiyor musunuz?', en: 'This will overwrite the current asset mapping. Continue?' },
+
+  // ==================== Auto Mapping ====================
+  'autoMapping.button':                { tr: 'Otomatik Eşleştir', en: 'Auto Mapping' },
+  'autoMapping.confirmTitle':          { tr: 'Mevcut Mapping Silinecek', en: 'Existing Mapping Will Be Replaced' },
+  'autoMapping.confirmBody':           { tr: '{gcpCount} GCP ve {componentCount} bileşen tanımlı. Otomatik eşleştirme çalıştırılırsa mevcut yapılandırma silinecek.', en: '{gcpCount} GCPs and {componentCount} components are defined. Running Auto Mapping will replace the existing configuration.' },
+  'autoMapping.confirmProceed':        { tr: 'Evet, Devam Et', en: 'Yes, Proceed' },
+  'autoMapping.cancel':                { tr: 'İptal', en: 'Cancel' },
+  'autoMapping.modalTitle':            { tr: 'Otomatik Eşleştirme', en: 'Auto Mapping' },
+  'autoMapping.done':                  { tr: 'Eşleştirme Tamamlandı', en: 'Mapping Complete' },
+  'autoMapping.viewMapping':           { tr: "Mapping'i Görüntüle", en: 'View Mapping' },
+  'autoMapping.statusSuccess':         { tr: 'BAŞARILI', en: 'SUCCESS' },
+  'autoMapping.statusPartial':         { tr: 'KISMI BAŞARI', en: 'PARTIAL SUCCESS' },
+  'autoMapping.statusFailed':          { tr: 'BAŞARISIZ', en: 'FAILED' },
+  'autoMapping.step.csvRead':          { tr: 'CSV okundu', en: 'CSV read' },
+  'autoMapping.step.phase1Done':       { tr: "Phase 1 GCP'ler oluşturuldu", en: 'Phase 1 GCPs created' },
+  'autoMapping.step.portalFetch':      { tr: 'Portal plants çekildi', en: 'Portal plants fetched' },
+  'autoMapping.step.phase2Done':       { tr: "Phase 2 GCP'ler oluşturuldu", en: 'Phase 2 GCPs created' },
+  'autoMapping.step.saved':            { tr: 'Mapping kaydedildi', en: 'Mapping saved' },
+  'autoMapping.error.portalFailed':    { tr: 'Portal bağlantısı kurulamadı. Phase 1 sonuçları korundu.', en: 'Portal connection failed. Phase 1 results were kept.' },
+  'autoMapping.error.csvFailed':       { tr: 'CSV okunamadı. İşlem iptal edildi.', en: 'Could not read CSV. Operation aborted.' },
+  'autoMapping.warn.missingAssetId':   { tr: '{column}: Asset_ID boş, BESS oluşturulmadı', en: '{column}: Asset_ID is empty, BESS skipped' },
+  'autoMapping.warn.duplicatePlantId': { tr: 'Plant ID {id} zaten eşleştirildi, atlandı', en: 'Plant ID {id} already mapped, skipped' },
+  'autoMapping.warn.defaultType':      { tr: 'Plant#{id} için tip belirlenemedi, varsayılan SOLAR kullanıldı', en: 'Plant#{id} type unknown, defaulting to SOLAR' },
+  'autoMapping.warn.nameNormalized':   { tr: '"{original}" ismi normalize edildi → "{normalized}"', en: '"{original}" name normalized → "{normalized}"' },
+  'autoMapping.warnings':              { tr: '{count} Uyarı', en: '{count} Warning(s)' },
 } as const;
 
 export type TranslationKey = keyof typeof T;
