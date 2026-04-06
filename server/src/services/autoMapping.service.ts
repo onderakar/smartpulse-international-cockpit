@@ -10,6 +10,7 @@ import {
   AutoMappingReport,
   AutoMappingWarning,
   GroupProfile,
+  DashboardProfile,
 } from '@smartpulse-intl/shared'
 import { UserSession } from '../store/sessions'
 import { FtpService } from './ftp.service'
@@ -143,7 +144,7 @@ export async function runAutoMapping(
       portalPlantId: battery.assetId,
       forecastPreference: { ...DEFAULT_FORECAST_PREFERENCE },
       monitoring: battery.masternode ? { masternode: battery.masternode, metrics: [] } : undefined,
-      bessParams: Object.keys(bp).length > 0 ? bp as BessParams : undefined,
+      bessParams: Object.values(bp).some(v => v !== undefined) ? bp as BessParams : undefined,
       installedCapacityMw: bp.maxDischargePowerMw ?? undefined,
     }
     bessCount++
@@ -269,14 +270,12 @@ export async function runAutoMapping(
   }
 
   if (phase2Success) {
-    for (const config of portalConfigs) {
-      for (const gcp of phase2Gcps) {
-        const gcpPlantId = gcp.components[0]?.portalPlantId
-        const inConfig = config.PowerPlantLimits.some(p => p.PowerPlantId === gcpPlantId)
-        if (inConfig) {
-          getOrCreateCompany({ CompanyId: config.CompanyId, CompanyName: config.CompanyName }).gridConnectionPoints.push(gcp)
-        }
-      }
+    for (const gcp of phase2Gcps) {
+      const gcpPlantId = gcp.components[0]?.portalPlantId
+      const companyInfo = (gcpPlantId != null && plantIdToCompany.has(gcpPlantId))
+        ? plantIdToCompany.get(gcpPlantId)!
+        : fallbackCompany(session)
+      getOrCreateCompany(companyInfo).gridConnectionPoints.push(gcp)
     }
   }
 
@@ -288,7 +287,7 @@ export async function runAutoMapping(
 
   await configStore.saveProfile(
     session.username,
-    { ...profile, assetMapping: newMapping } as any,
+    { ...profile, assetMapping: newMapping } as unknown as DashboardProfile,
     String(session.groupId),
   )
   emit({ step: 'saved', status: 'ok' })
