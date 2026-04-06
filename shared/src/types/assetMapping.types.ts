@@ -14,11 +14,11 @@ export interface BapSource {
   source: 'response.data.bap';
 }
 
-export type UEVCBComponentType = 'BESS' | 'SOLAR' | 'WIND' | 'HYDRO' | 'THERMAL' | 'LOAD' | 'OTHER';
+export type ComponentType = 'BESS' | 'SOLAR' | 'WIND' | 'HYDRO' | 'THERMAL' | 'LOAD' | 'OTHER';
 
-export interface UEVCBComponent {
+export interface GcpComponent {
   componentId: string;
-  type: UEVCBComponentType;
+  type: ComponentType;
   displayName: string;
   portalPlantId: number;
   forecastPreference: {
@@ -27,24 +27,24 @@ export interface UEVCBComponent {
   };
 
   scheduleId?: string;
-  /** Template pattern for schedule FTP filename, e.g. "Battery_Schedule_{UEVCB_ID}.csv"
-   *  Supported placeholders: {UEVCB_ID}, {ASSET_ID}, {SCHEDULE_ID}, {UEVCB_NAME} */
+  /** Template pattern for schedule FTP filename, e.g. "Battery_Schedule_{GCP_ID}.csv"
+   *  Supported placeholders: {GCP_ID}, {ASSET_ID}, {SCHEDULE_ID}, {GCP_NAME} */
   scheduleFilePattern?: string;
 
-  // Monitoring configurations explicitly mapped to this physical component
   monitoring?: {
     masternode: string;
     metrics: Array<LabeledMetricMapping | BapSource>;
   };
 }
 
-export interface UEVCB {
-  uevcbId: string;
+export interface GridConnectionPoint {
+  /** Numeric ID — user-entered now, will map to portal GCP entity in the future */
+  id: number;
   name: string;
-  primaryPortalPlantId: number;
   timezone: string;
+  /** Default: 15 (quarter-hourly) */
   resolutionMinutes: MTUResolution;
-  components: UEVCBComponent[];
+  components: GcpComponent[];
 }
 
 export interface CompanyMapping {
@@ -52,7 +52,7 @@ export interface CompanyMapping {
   companyName: string;
   fullName?: string;
   timezone: string;
-  uevcbs: UEVCB[];
+  gridConnectionPoints: GridConnectionPoint[];
 }
 
 export interface AssetMapping {
@@ -61,42 +61,41 @@ export interface AssetMapping {
   ftpFilename: string;
 }
 
-/** Get the first UEVCB across all companies (for backward-compat consumers). */
-export function getFirstUevcb(mapping: AssetMapping | null | undefined): UEVCB | null {
+/** Get the first GCP across all companies. */
+export function getFirstGcp(mapping: AssetMapping | null | undefined): GridConnectionPoint | null {
   if (!mapping?.companies?.length) return null;
   for (const company of mapping.companies) {
-    if (company.uevcbs?.length) return company.uevcbs[0];
+    if (company.gridConnectionPoints?.length) return company.gridConnectionPoints[0];
   }
   return null;
 }
 
-/** Get all UEVCBs across all companies. */
-export function getAllUevcbs(mapping: AssetMapping | null | undefined): UEVCB[] {
+/** Get all GCPs across all companies. */
+export function getAllGcps(mapping: AssetMapping | null | undefined): GridConnectionPoint[] {
   if (!mapping?.companies?.length) return [];
-  return mapping.companies.flatMap(c => c.uevcbs || []);
+  return mapping.companies.flatMap(c => c.gridConnectionPoints || []);
 }
 
-/** Get all UEVCBs that contain a BESS component with a valid portalPlantId. */
-export interface BessUevcbInfo {
-  uevcbId: string;
-  name: string;
-  primaryPortalPlantId: number;
+/** Info about a BESS component within a GCP. One entry per BESS component (flattened). */
+export interface BessGcpInfo {
+  gcpId: number;
+  gcpName: string;
   timezone: string;
-  bessComponent: UEVCBComponent;
+  bessComponent: GcpComponent;
 }
 
-export function getBessUevcbs(mapping: AssetMapping | null | undefined): BessUevcbInfo[] {
+/** Get all GCPs that contain a BESS component with a valid portalPlantId. */
+export function getBessGcps(mapping: AssetMapping | null | undefined): BessGcpInfo[] {
   if (!mapping?.companies) return [];
-  const result: BessUevcbInfo[] = [];
+  const result: BessGcpInfo[] = [];
   for (const company of mapping.companies) {
-    for (const uevcb of company.uevcbs) {
-      for (const comp of uevcb.components) {
+    for (const gcp of (company.gridConnectionPoints || [])) {
+      for (const comp of gcp.components) {
         if (comp.type === 'BESS' && comp.portalPlantId > 0) {
           result.push({
-            uevcbId: uevcb.uevcbId,
-            name: uevcb.name,
-            primaryPortalPlantId: uevcb.primaryPortalPlantId,
-            timezone: uevcb.timezone,
+            gcpId: gcp.id,
+            gcpName: gcp.name,
+            timezone: gcp.timezone,
             bessComponent: comp,
           });
         }
@@ -106,18 +105,49 @@ export function getBessUevcbs(mapping: AssetMapping | null | undefined): BessUev
   return result;
 }
 
-/** Migrate old single-UEVCB AssetMapping to new Company-based format. */
+/** Migrate old AssetMapping formats to current format. */
 export function migrateAssetMapping(raw: any): AssetMapping {
+  // Already in current format
   if (raw?.companies && Array.isArray(raw.companies)) {
-    return raw as AssetMapping;
+    // Migrate uevcbs → gridConnectionPoints if needed
+    const companies = raw.companies.map((c: any) => {
+      if (c.gridConnectionPoints) return c;
+      if (c.uevcbs) {
+        return {
+          ...c,
+          gridConnectionPoints: c.uevcbs.map((u: any) => {
+            // primaryPortalPlantId is preferred; uevcbId was string so parse it
+            const numId = u.primaryPortalPlantId ?? (typeof u.uevcbId === 'string' ? parseInt(u.uevcbId, 10) : u.uevcbId) ?? u.id ?? 0;
+            return {
+              id: isNaN(numId) ? 0 : numId,
+              name: u.name,
+              timezone: u.timezone,
+              resolutionMinutes: u.resolutionMinutes ?? 15,
+              components: u.components || [],
+            };
+          }),
+          uevcbs: undefined,
+        };
+      }
+      return c;
+    });
+    return { ...raw, companies } as AssetMapping;
   }
+  // Legacy single-UEVCB format
   if (raw?.uevcb) {
+    const u = raw.uevcb;
     return {
       companies: [{
         companyId: 0,
         companyName: 'Migrated',
-        timezone: raw.uevcb.timezone || 'Europe/Istanbul',
-        uevcbs: [raw.uevcb],
+        timezone: u.timezone || 'UTC',
+        gridConnectionPoints: [{
+          id: u.primaryPortalPlantId ?? 0,
+          name: u.name || 'Migrated',
+          timezone: u.timezone || 'UTC',
+          resolutionMinutes: u.resolutionMinutes ?? 15,
+          components: u.components || [],
+        }],
       }],
       ftpDirection: raw.ftpDirection || 'incoming',
       ftpFilename: raw.ftpFilename || 'Technical_Parameters.csv',
@@ -129,3 +159,19 @@ export function migrateAssetMapping(raw: any): AssetMapping {
     ftpFilename: 'Technical_Parameters.csv',
   };
 }
+
+// ── Backward-compat aliases (remove in Task 8) ──
+/** @deprecated Use GridConnectionPoint */
+export type UEVCB = GridConnectionPoint;
+/** @deprecated Use GcpComponent */
+export type UEVCBComponent = GcpComponent;
+/** @deprecated Use ComponentType */
+export type UEVCBComponentType = ComponentType;
+/** @deprecated Use getFirstGcp */
+export const getFirstUevcb = getFirstGcp;
+/** @deprecated Use getAllGcps */
+export const getAllUevcbs = getAllGcps;
+/** @deprecated Use getBessGcps */
+export const getBessUevcbs = getBessGcps;
+/** @deprecated Use BessGcpInfo */
+export type BessUevcbInfo = BessGcpInfo;
