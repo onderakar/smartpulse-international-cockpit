@@ -8,10 +8,10 @@ import { useLocale } from '../context/LocaleContext';
 
 interface BessItem {
   plantId: number;          // component's own portalPlantId
-  parentPlantId: number;    // UEVCB's primaryPortalPlantId (matched via Asset_ID in CSV)
+  parentPlantId: number;    // GCP's numeric id (matched via Asset_ID in CSV)
   csvColumnKey: string | null; // CSV column key (e.g. "Oze_3179"), resolved after CSV load
   displayName: string;
-  uevcbName: string;
+  gcpName: string;
 }
 
 export function BatteryParamsPage() {
@@ -24,15 +24,15 @@ export function BatteryParamsPage() {
     if (!mapping?.companies) return [];
     const result: BessItem[] = [];
     for (const company of mapping.companies) {
-      for (const uevcb of company.uevcbs) {
-        for (const comp of uevcb.components) {
+      for (const gcp of company.gridConnectionPoints) {
+        for (const comp of gcp.components) {
           if (comp.type === 'BESS' && comp.portalPlantId > 0) {
             result.push({
               plantId: comp.portalPlantId,
-              parentPlantId: uevcb.primaryPortalPlantId,
+              parentPlantId: gcp.id,
               csvColumnKey: null, // resolved after CSV loads
               displayName: comp.displayName,
-              uevcbName: uevcb.name,
+              gcpName: gcp.name,
             });
           }
         }
@@ -203,7 +203,7 @@ export function BatteryParamsPage() {
               >
                 <div className="text-sm font-medium">{bess.displayName}</div>
                 <div className="text-xs opacity-60 mt-0.5">
-                  {bess.uevcbName} &middot; {t('schedule.plant')}: {bess.parentPlantId}
+                  {bess.gcpName} &middot; {t('schedule.plant')}: {bess.parentPlantId}
                   {!hasData && multiParams && !csvKey && (
                     <span className="ml-1 text-yellow-500">({t('batteryParams.notInCsv')})</span>
                   )}

@@ -13,8 +13,8 @@ import { useTechParams } from '../hooks/useTechParams';
 import { useScheduleData } from '../hooks/useScheduleData';
 import { scheduleApi } from '../api/schedule.api';
 import { forecastApi } from '../api/forecast.api';
-import { getBessUevcbs } from '@shared/types/assetMapping.types';
-import type { BessUevcbInfo } from '@shared/types/assetMapping.types';
+import { getBessGcps } from '@shared/types/assetMapping.types';
+import type { BessGcpInfo } from '@shared/types/assetMapping.types';
 import type { ScheduleRow, ForecastSubmissionPrediction } from '@smartpulse-intl/shared';
 import { SCHEDULE_CSV_COLUMNS } from '@smartpulse-intl/shared';
 import { SlotRevisionPopup } from '../components/schedule/SlotRevisionPopup';
@@ -168,7 +168,7 @@ export function BatteryProgramPage() {
   const mapping = profile?.assetMapping ?? null;
   const { params: techParams } = useTechParams(mapping);
 
-  const bessList = useMemo(() => getBessUevcbs(mapping), [mapping]);
+  const bessList = useMemo(() => getBessGcps(mapping), [mapping]);
   const fallbackCompanyId = companies.length > 0 ? companies[0].id : null;
 
   // State
@@ -197,25 +197,25 @@ export function BatteryProgramPage() {
     return () => clearInterval(id);
   }, []);
 
-  const selectedBess: BessUevcbInfo | null = bessList[selectedBessIdx] ?? null;
+  const selectedBess: BessGcpInfo | null = bessList[selectedBessIdx] ?? null;
 
-  const selectedUevcb = useMemo(() => {
+  const selectedGcp = useMemo(() => {
     if (!mapping?.companies || !selectedBess) return null;
     for (const c of mapping.companies) {
-      for (const u of c.uevcbs) {
-        if (u.uevcbId === selectedBess.uevcbId) return u;
+      for (const gcp of c.gridConnectionPoints) {
+        if (gcp.id === selectedBess.gcpId) return gcp;
       }
     }
     return null;
   }, [mapping, selectedBess]);
 
-  const _timezone = selectedUevcb?.timezone ?? 'Europe/Istanbul';
+  const _timezone = selectedGcp?.timezone ?? 'UTC';
 
   const companyId = useMemo(() => {
     if (!mapping?.companies || !selectedBess) return fallbackCompanyId;
     for (const c of mapping.companies) {
-      for (const u of c.uevcbs) {
-        if (u.uevcbId === selectedBess.uevcbId) return c.companyId || fallbackCompanyId;
+      for (const gcp of c.gridConnectionPoints) {
+        if (gcp.id === selectedBess.gcpId) return c.companyId || fallbackCompanyId;
       }
     }
     return fallbackCompanyId;
@@ -231,12 +231,12 @@ export function BatteryProgramPage() {
 
   // ------- Schedule data (15min) -------
   const { rows: scheduleTodayRows, header: scheduleTodayHeader, loading: scheduleLoading, lastFetchedAt: scheduleLastFetched, fetchSchedule: fetchScheduleToday } = useScheduleData({
-    plantId: selectedBess?.primaryPortalPlantId ?? null,
+    plantId: selectedBess?.gcpId ?? null,
     dateKey: todayKey,
     enabled: selectedBess !== null,
   });
   const { rows: scheduleTomorrowRows, fetchSchedule: fetchScheduleTomorrow } = useScheduleData({
-    plantId: selectedBess?.primaryPortalPlantId ?? null,
+    plantId: selectedBess?.gcpId ?? null,
     dateKey: tomorrowKey,
     enabled: selectedBess !== null,
   });
@@ -904,7 +904,7 @@ export function BatteryProgramPage() {
     hoverTimerRef.current = setTimeout(() => {
       const rect = cellEl.getBoundingClientRect();
       setRevisionPopup({
-        plantId: selectedBess.primaryPortalPlantId,
+        plantId: selectedBess.gcpId,
         deliveryStart: row.utcDeliveryStart!,
         deliveryEnd: row.utcDeliveryEnd!,
         anchorRect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
@@ -1262,7 +1262,7 @@ export function BatteryProgramPage() {
   // ------- Save Schedule -------
   const handleSaveSchedule = useCallback(async () => {
     if (!selectedBess) return;
-    const plantId = selectedBess.primaryPortalPlantId;
+    const plantId = selectedBess.gcpId;
     const header = scheduleTodayHeader.length > 0 ? scheduleTodayHeader : [...SCHEDULE_CSV_COLUMNS];
 
     setSavingSchedule(true);
@@ -1502,7 +1502,7 @@ export function BatteryProgramPage() {
         <div className="flex flex-wrap gap-2">
           {bessList.map((bess, idx) => (
             <button
-              key={bess.uevcbId + bess.bessComponent.componentId}
+              key={bess.gcpId + '-' + bess.bessComponent.componentId}
               onClick={() => { setSelectedBessIdx(idx); setScheduleDirty(false); setProgramEdited(new Set()); }}
               className={`text-left px-4 py-2 rounded-lg border transition-colors ${
                 idx === selectedBessIdx
@@ -1574,7 +1574,7 @@ export function BatteryProgramPage() {
               onClick={async () => {
                 if (!selectedBess) return;
                 try {
-                  await scheduleApi.exportVersionedHistory(selectedBess.primaryPortalPlantId, todayKey);
+                  await scheduleApi.exportVersionedHistory(selectedBess.gcpId, todayKey);
                 } catch (err: any) {
                   console.error('[Export] error:', err);
                   toast.error(err.response?.data?.message || t('common.saveFailed'));

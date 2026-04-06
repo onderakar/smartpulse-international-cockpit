@@ -22,11 +22,10 @@ interface ForecastPlantItem {
   resolutionMinutes: number;
 }
 
-interface ForecastUevcbGroup {
-  uevcbId: string;
-  uevcbName: string;
+interface ForecastGcpGroup {
+  gcpId: number;
+  gcpName: string;
   companyId: number;
-  parentPlantId: number;
   resolutionMinutes: number;
   children: ForecastPlantItem[];
 }
@@ -59,8 +58,12 @@ function pad2(n: number): string {
   return n < 10 ? `0${n}` : `${n}`;
 }
 
-// Europe/Istanbul is permanently UTC+3 (no DST)
-const TZ_OFFSET_MS = 3 * 3600_000;
+/** Compute the UTC offset in ms for a given IANA timezone at the current moment. */
+function getTzOffsetMs(timezone: string): number {
+  const utcStr = new Date().toLocaleString('en-US', { timeZone: 'UTC' });
+  const tzStr = new Date().toLocaleString('en-US', { timeZone: timezone || 'UTC' });
+  return new Date(tzStr).getTime() - new Date(utcStr).getTime();
+}
 
 function buildEmptyRows(dateKey: string, resolutionMinutes: number): SlotRow[] {
   const rows: SlotRow[] = [];
@@ -140,17 +143,17 @@ export function ForecastPage() {
   const { t } = useLocale();
   const mapping = profile?.assetMapping ?? null;
 
-  // Build hierarchical UEVCB groups: parent plant + child components
-  const uevcbGroups = useMemo<ForecastUevcbGroup[]>(() => {
+  // Build hierarchical GCP groups: child components only (no portal plant at GCP level)
+  const gcpGroups = useMemo<ForecastGcpGroup[]>(() => {
     if (!mapping?.companies) return [];
-    const groups: ForecastUevcbGroup[] = [];
+    const groups: ForecastGcpGroup[] = [];
     for (const company of mapping.companies) {
-      for (const uevcb of company.uevcbs) {
+      for (const gcp of company.gridConnectionPoints) {
         const children: ForecastPlantItem[] = [];
         const seenIds = new Set<number>();
 
         // Add child components
-        for (const comp of uevcb.components) {
+        for (const comp of gcp.components) {
           if (comp.portalPlantId > 0 && !seenIds.has(comp.portalPlantId)) {
             seenIds.add(comp.portalPlantId);
             children.push({
@@ -158,18 +161,17 @@ export function ForecastPage() {
               plantId: comp.portalPlantId,
               displayName: comp.displayName,
               isParent: false,
-              resolutionMinutes: uevcb.resolutionMinutes ?? 60,
+              resolutionMinutes: gcp.resolutionMinutes ?? 60,
             });
           }
         }
 
-        if (uevcb.primaryPortalPlantId > 0 || children.length > 0) {
+        if (children.length > 0) {
           groups.push({
-            uevcbId: uevcb.uevcbId,
-            uevcbName: uevcb.name,
+            gcpId: gcp.id,
+            gcpName: gcp.name,
             companyId: company.companyId,
-            parentPlantId: uevcb.primaryPortalPlantId,
-            resolutionMinutes: uevcb.resolutionMinutes ?? 60,
+            resolutionMinutes: gcp.resolutionMinutes ?? 60,
             children,
           });
         }
@@ -178,23 +180,14 @@ export function ForecastPage() {
     return groups;
   }, [mapping]);
 
-  // Flat list for lookups
+  // Flat list for lookups — only component-level plants (no parent at GCP level)
   const allPlants = useMemo<ForecastPlantItem[]>(() => {
     const result: ForecastPlantItem[] = [];
-    for (const g of uevcbGroups) {
-      if (g.parentPlantId > 0) {
-        result.push({
-          companyId: g.companyId,
-          plantId: g.parentPlantId,
-          displayName: g.uevcbName,
-          isParent: true,
-          resolutionMinutes: g.resolutionMinutes,
-        });
-      }
+    for (const g of gcpGroups) {
       result.push(...g.children);
     }
     return result;
-  }, [uevcbGroups]);
+  }, [gcpGroups]);
 
   const fallbackCompanyId = companies.length > 0 ? companies[0].id : null;
   const RESERVED_PROVIDERS = ['UserForecast', 'FinalForecast', 'EpiasForecast'];
@@ -215,12 +208,12 @@ export function ForecastPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedPlantId && uevcbGroups.length > 0) {
-      // Auto-select parent plant of first group
-      const first = uevcbGroups[0];
-      setSelectedPlantId(first.parentPlantId > 0 ? first.parentPlantId : first.children[0]?.plantId ?? null);
+    if (!selectedPlantId && gcpGroups.length > 0) {
+      // Auto-select first component of first group
+      const first = gcpGroups[0];
+      setSelectedPlantId(first.children[0]?.plantId ?? null);
     }
-  }, [uevcbGroups, selectedPlantId]);
+  }, [gcpGroups, selectedPlantId]);
 
   // Actual production data from monitoring API
   const [actualProduction, setActualProduction] = useState<{ timestamp: number; value: number }[]>([]);
@@ -243,27 +236,23 @@ export function ForecastPage() {
   useEffect(() => {
     if (!selectedPlantId || !mapping?.companies) { setActualProduction([]); return; }
 
-    // Find the UEVCB group containing this plant
-    let parentPlantId = 0;
+    // Find the GCP group containing this plant
+    let gcpId = 0;
     let companyId = 0;
+    let gcpTimezone = 'UTC';
     let targetComponentId: string | null = null;
 
-    for (const group of uevcbGroups) {
-      if (group.parentPlantId === selectedPlantId) {
-        // Parent plant selected → will aggregate all POWER metrics
-        parentPlantId = group.parentPlantId;
-        companyId = group.companyId;
-        break;
-      }
+    for (const group of gcpGroups) {
       const child = group.children.find(c => c.plantId === selectedPlantId);
       if (child) {
-        parentPlantId = group.parentPlantId;
+        gcpId = group.gcpId;
         companyId = group.companyId;
-        // Find the component's componentId for matching
+        // Find the component's componentId and timezone
         for (const company of mapping.companies) {
-          for (const uevcb of company.uevcbs) {
-            if (uevcb.primaryPortalPlantId === parentPlantId) {
-              const comp = uevcb.components.find(c => c.portalPlantId === selectedPlantId);
+          for (const gcp of company.gridConnectionPoints) {
+            if (gcp.id === gcpId) {
+              gcpTimezone = gcp.timezone || 'UTC';
+              const comp = gcp.components.find(c => c.portalPlantId === selectedPlantId);
               if (comp) targetComponentId = comp.componentId;
             }
           }
@@ -272,21 +261,21 @@ export function ForecastPage() {
       }
     }
 
-    if (!parentPlantId || !companyId) { setActualProduction([]); return; }
+    if (!gcpId || !companyId) { setActualProduction([]); return; }
 
-    // Build date range for the selected day — midnight Istanbul in UTC
+    // Build date range for the selected day using the GCP's timezone
     const [_y, _m, _d] = dateKey.split('-').map(Number);
-    const midnightUtcMs = Date.UTC(_y, _m - 1, _d) - TZ_OFFSET_MS;
+    const tzOffsetMs = getTzOffsetMs(gcpTimezone);
+    const midnightUtcMs = Date.UTC(_y, _m - 1, _d) - tzOffsetMs;
     const startISO = new Date(midnightUtcMs).toISOString();
     const endISO = new Date(midnightUtcMs + 86_400_000).toISOString();
 
-    monitoringApi.getLiveMetricsV2(parentPlantId, companyId, startISO, endISO).then(rawMetrics => {
+    monitoringApi.getLiveMetricsV2(gcpId, companyId, startISO, endISO).then(rawMetrics => {
       let points: { timestamp: number; value: number }[] = [];
 
       if (!targetComponentId) {
-        // Parent plant: aggregate all POWER_* + BAP metrics as net production
+        // Aggregate all POWER_* + BAP metrics as net production
         const powerMetrics = rawMetrics.filter(m => m.type.startsWith('POWER') || m.type === 'BAP');
-        // Group by timestamp and sum
         const tsMap = new Map<number, number>();
         for (const m of powerMetrics) {
           tsMap.set(m.timestamp, (tsMap.get(m.timestamp) ?? 0) + m.value);
@@ -296,9 +285,9 @@ export function ForecastPage() {
         // Child component: find matching POWER metric using component's monitoring config
         let matchTypes: string[] = [];
         for (const company of mapping!.companies) {
-          for (const uevcb of company.uevcbs) {
-            if (uevcb.primaryPortalPlantId === parentPlantId) {
-              const comp = uevcb.components.find(c => c.componentId === targetComponentId);
+          for (const gcp of company.gridConnectionPoints) {
+            if (gcp.id === gcpId) {
+              const comp = gcp.components.find(c => c.componentId === targetComponentId);
               if (comp?.monitoring?.metrics) {
                 for (const metric of comp.monitoring.metrics) {
                   if ('nodeidentity' in metric) {
@@ -320,7 +309,7 @@ export function ForecastPage() {
             .map(m => ({ timestamp: m.timestamp, value: m.value }));
         } else {
           // Fallback: if component is BESS, use BAP
-          const compType = mapping!.companies.flatMap(c => c.uevcbs).flatMap(u => u.components).find(c => c.componentId === targetComponentId)?.type;
+          const compType = mapping!.companies.flatMap(c => c.gridConnectionPoints).flatMap(gcp => gcp.components).find(c => c.componentId === targetComponentId)?.type;
           if (compType === 'BESS') {
             points = rawMetrics.filter(m => m.type === 'BAP').map(m => ({ timestamp: m.timestamp, value: m.value }));
           }
@@ -330,7 +319,7 @@ export function ForecastPage() {
       points.sort((a, b) => a.timestamp - b.timestamp);
       setActualProduction(points);
     }).catch(() => setActualProduction([]));
-  }, [selectedPlantId, dateKey, mapping, uevcbGroups]);
+  }, [selectedPlantId, dateKey, mapping, gcpGroups]);
 
   const handleDateChange = useCallback((delta: number) => {
     setDateKey(prev => {
@@ -478,13 +467,27 @@ export function ForecastPage() {
     const xMin = Date.UTC(y, mo - 1, d);
     const xMax = Date.UTC(y, mo - 1, d + 1);
 
+    // Determine timezone from selected plant's GCP
+    const selectedGcpTimezone = (() => {
+      if (!selectedPlantId || !mapping?.companies) return 'UTC';
+      for (const company of mapping.companies) {
+        for (const gcp of company.gridConnectionPoints) {
+          if (gcp.components.some(c => c.portalPlantId === selectedPlantId)) {
+            return gcp.timezone || 'UTC';
+          }
+        }
+      }
+      return 'UTC';
+    })();
+    const tzOffsetMs = getTzOffsetMs(selectedGcpTimezone);
+
     // Forecast provider series — deliveryStart is local time, convert to fake-UTC
     const provSeries = viewerSeries.filter(s => !s.loading).map(s => {
       const timeData: [number, number][] = s.data
         .map(d => {
           const localMs = new Date(d.deliveryStart).getTime();
-          // Convert local epoch ms to fake-UTC: add offset so UTC display shows Istanbul time
-          const fakeUtc = localMs + TZ_OFFSET_MS;
+          // Convert local epoch ms to fake-UTC: add offset so UTC display shows local time
+          const fakeUtc = localMs + tzOffsetMs;
           return [fakeUtc, d.value] as [number, number];
         })
         .sort((a, b) => a[0] - b[0]);
@@ -501,7 +504,7 @@ export function ForecastPage() {
 
     // Actual production series — monitoring timestamps + TZ offset (same as LiveChart)
     const actualProdData: [number, number][] = actualProduction
-      .map(d => [d.timestamp + TZ_OFFSET_MS, d.value] as [number, number])
+      .map(d => [d.timestamp + tzOffsetMs, d.value] as [number, number])
       .sort((a, b) => a[0] - b[0]);
 
     const allSeries: any[] = [];
@@ -524,7 +527,7 @@ export function ForecastPage() {
 
     // NOW mark on first series (fake-UTC)
     if (isToday && allSeries.length > 0) {
-      const nowTs = Date.now() + TZ_OFFSET_MS;
+      const nowTs = Date.now() + tzOffsetMs;
       allSeries[0].markLine = {
         symbol: 'none',
         silent: true,
@@ -572,7 +575,7 @@ export function ForecastPage() {
         showSymbol: false,
       }],
     };
-  }, [viewerSeries, actualProduction, dateKey, isToday, t]);
+  }, [viewerSeries, actualProduction, dateKey, isToday, t, selectedPlantId, mapping]);
 
   // Viewer table data — merge all series + actual production timestamps
   const viewerTableRows = useMemo(() => {
@@ -953,7 +956,7 @@ export function ForecastPage() {
   }, [resolution, t]);
 
   // ---- Guards ----
-  if (!mapping || uevcbGroups.length === 0) {
+  if (!mapping || gcpGroups.length === 0) {
     return (
       <div className="p-6 max-w-6xl mx-auto">
         <h2 className="text-xl font-bold text-white mb-6">{t('forecast.title')}</h2>
@@ -980,29 +983,17 @@ export function ForecastPage() {
         </div>
       </div>
 
-      {/* Plant selector — grouped by UEVCB (parent + children) */}
+      {/* Plant selector — grouped by GCP (child components only) */}
       <div className="mb-5">
         <span className="text-xs text-gray-500 block mb-2">{t('forecast.batteries')}</span>
         <div className="flex flex-col gap-3">
-          {uevcbGroups.map(group => (
-            <div key={group.uevcbId}>
-              {/* Parent plant (ana santral) */}
-              {group.parentPlantId > 0 && (
-                <button
-                  onClick={() => setSelectedPlantId(group.parentPlantId)}
-                  className={`text-left w-full px-4 py-2.5 rounded-t-lg border transition-colors ${
-                    group.parentPlantId === selectedPlantId
-                      ? 'bg-primary-600/20 border-primary-500 text-primary-300'
-                      : 'bg-dark-800 border-gray-700 text-gray-400 hover:border-gray-600'
-                  } ${group.children.length > 0 ? 'rounded-b-none border-b-0' : 'rounded-b-lg'}`}
-                >
-                  <div className="text-sm font-semibold">{group.uevcbName}</div>
-                  <div className="text-xs opacity-60 mt-0.5">ID: {group.parentPlantId}</div>
-                </button>
-              )}
-              {/* Child components (alt birimler) */}
+          {gcpGroups.map(group => (
+            <div key={group.gcpId}>
+              {/* GCP label */}
+              <div className="text-xs text-gray-500 mb-1">{group.gcpName}</div>
+              {/* Child components */}
               {group.children.length > 0 && (
-                <div className={`flex flex-wrap gap-0 ${group.parentPlantId > 0 ? 'ml-4' : ''}`}>
+                <div className="flex flex-wrap gap-0">
                   {group.children.map((child, ci) => (
                     <button
                       key={child.plantId}
@@ -1011,7 +1002,7 @@ export function ForecastPage() {
                         child.plantId === selectedPlantId
                           ? 'bg-primary-600/20 border-primary-500 text-primary-300'
                           : 'bg-dark-900/50 border-gray-700 text-gray-400 hover:border-gray-600'
-                      } ${ci === 0 && group.parentPlantId > 0 ? 'rounded-tl-none' : 'rounded-tl-lg'} ${ci === group.children.length - 1 ? 'rounded-br-lg' : ''} ${ci === 0 ? 'rounded-bl-lg' : ''}`}
+                      } ${ci === 0 ? 'rounded-tl-lg rounded-bl-lg' : ''} ${ci === group.children.length - 1 ? 'rounded-tr-lg rounded-br-lg' : ''}`}
                     >
                       <div className="text-xs font-medium">{child.displayName}</div>
                       <div className="text-[10px] opacity-60">ID: {child.plantId}</div>
