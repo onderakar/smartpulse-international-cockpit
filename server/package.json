@@ -1,0 +1,36 @@
+{
+  "name": "@smartpulse-intl/server",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@smartpulse-intl/shared": "*",
+    "axios": "^1.7.9",
+    "axios-cookiejar-support": "^5.0.5",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "lowdb": "^7.0.1",
+    "socket.io": "^4.8.3",
+    "tough-cookie": "^5.1.0",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.8",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/express-session": "^1.18.1",
+    "@types/node": "^22.13.4",
+    "@types/socket.io": "^3.0.1",
+    "@types/tough-cookie": "^4.0.5",
+    "@types/uuid": "^10.0.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,258 @@
+@import url('https://fonts.googleapis.com/css2?family=Mulish:wght@300;400;500;600;700&display=swap');
+
+@import 'ag-grid-community/styles/ag-grid.css';
+@import 'ag-grid-community/styles/ag-theme-alpine.css';
+
+:root {
+  --color-bg: #FFFFFF;
+  --color-surface: #FAFBFC;
+  --color-surface-alt: #F8F9FA;
+  --color-border: #EBEDF0;
+  --color-border-subtle: #E1E3E6;
+  --color-text: #334155;
+  --color-text-secondary: #475569;
+  --color-text-muted: #64748b;
+  --color-text-disabled: #94a3b8;
+  --color-hover: #F0FDFA;
+  --color-hover-subtle: rgba(15,118,110,0.04);
+
+  /* Shadows */
+  --shadow-card: 0 0 2px 0 rgba(145,158,171,0.2), 0 12px 24px -4px rgba(145,158,171,0.12);
+  --shadow-dropdown: 0 0 2px 0 rgba(145,158,171,0.24), -20px 20px 40px -4px rgba(145,158,171,0.24);
+  --shadow-z1: 0 1px 2px 0 rgba(145,158,171,0.16);
+
+  /* AG Grid */
+  --ag-sp-header-bg: #FAFBFC;
+  --ag-sp-odd-row-bg: #F8F9FA;
+  --ag-sp-bg: #FFFFFF;
+  --ag-sp-header-hover-bg: #F0FDFA;
+  --ag-sp-fg: #334155;
+  --ag-sp-header-fg: #475569;
+  --ag-sp-border: #EBEDF0;
+  --ag-sp-header-border: #E1E3E6;
+  --ag-sp-row-hover: #F0FDFA;
+  --ag-sp-current-hour-bg: rgba(15,118,110,0.06);
+  --ag-sp-scrollbar-bg: #FAFBFC;
+}
+
+.dark {
+  --color-bg: #32363E;
+  --color-surface: #414650;
+  --color-surface-alt: #414650;
+  --color-border: #6E727A;
+  --color-border-subtle: #3a3f47;
+  --color-text: #D7D7D7;
+  --color-text-secondary: #AAAEB3;
+  --color-text-muted: #94a3b8;
+  --color-text-disabled: #64748b;
+  --color-hover: #2a3334;
+  --color-hover-subtle: rgba(15,118,110,0.08);
+
+  /* Shadows */
+  --shadow-card: 0 0 2px 0 rgba(0,0,0,0.2), 0 12px 24px -4px rgba(0,0,0,0.12);
+  --shadow-dropdown: 0 0 2px 0 rgba(0,0,0,0.24), -20px 20px 40px -4px rgba(0,0,0,0.24);
+  --shadow-z1: 0 1px 2px 0 rgba(0,0,0,0.16);
+
+  /* AG Grid */
+  --ag-sp-header-bg: #414650;
+  --ag-sp-odd-row-bg: #414650;
+  --ag-sp-bg: #32363E;
+  --ag-sp-header-hover-bg: #414650;
+  --ag-sp-fg: #D7D7D7;
+  --ag-sp-header-fg: #AAAEB3;
+  --ag-sp-border: #6E727A;
+  --ag-sp-header-border: #6E727A;
+  --ag-sp-row-hover: #2a3334;
+  --ag-sp-current-hour-bg: rgba(15,118,110,0.15);
+  --ag-sp-scrollbar-bg: #414650;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[var(--color-bg)] text-[var(--color-text)] font-sans antialiased;
+  }
+}
+
+/* react-grid-layout styles */
+.react-grid-layout {
+  position: relative;
+}
+
+.react-grid-item {
+  transition: all 200ms ease;
+  transition-property: left, top;
+}
+
+.react-grid-item.cssTransforms {
+  transition-property: transform;
+}
+
+.react-grid-item.resizing {
+  z-index: 1;
+  will-change: width, height;
+}
+
+.react-grid-item > .react-resizable-handle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  bottom: 0;
+  right: 0;
+  cursor: se-resize;
+}
+
+.react-grid-item > .react-resizable-handle::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 5px;
+  height: 5px;
+  border-right: 2px solid rgba(255, 255, 255, 0.3);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+/* AG Grid dark theme overrides */
+.ag-theme-alpine-dark {
+  --ag-background-color: #1a1a2e;
+  --ag-header-background-color: #16162a;
+  --ag-odd-row-background-color: #1e1e34;
+  --ag-row-hover-color: rgba(99, 102, 241, 0.08);
+  --ag-border-color: rgba(255, 255, 255, 0.06);
+  --ag-header-foreground-color: #9ca3af;
+  --ag-foreground-color: #e5e7eb;
+  --ag-row-height: 32px;
+  --ag-header-height: 36px;
+  --ag-font-size: 12px;
+  --ag-font-family: 'Inter', ui-monospace, monospace;
+  --ag-selected-row-background-color: rgba(99, 102, 241, 0.15);
+  --ag-range-selection-background-color: rgba(56, 178, 172, 0.2);
+  --ag-range-selection-border-color: #38b2ac;
+  --ag-input-focus-border-color: #38b2ac;
+}
+
+.ag-theme-alpine-dark .ag-cell {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+}
+
+.ag-theme-alpine-dark .ag-row.ag-row-now {
+  background-color: rgba(99, 102, 241, 0.12) !important;
+}
+
+.ag-theme-alpine-dark .ag-row.ag-row-past {
+  opacity: 0.78;
+}
+
+.ag-theme-alpine-dark .ag-row.ag-row-day-sep {
+  border-top: 2px solid rgba(99, 102, 241, 0.4) !important;
+}
+
+.ag-theme-alpine-dark .ag-cell.cell-charge {
+  color: #34d399;
+}
+
+.ag-theme-alpine-dark .ag-cell.cell-discharge {
+  color: #f87171;
+}
+
+.ag-theme-alpine-dark .ag-cell.cell-idle {
+  color: #6b7280;
+}
+
+.ag-theme-alpine-dark .ag-cell.cell-null {
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 4px,
+    rgba(239, 68, 68, 0.08) 4px,
+    rgba(239, 68, 68, 0.08) 8px
+  );
+  color: #ef4444;
+}
+
+.ag-theme-alpine-dark .ag-cell.cell-edited {
+  background-color: rgba(56, 178, 172, 0.1);
+}
+
+.ag-theme-alpine-dark .ag-cell.cell-range-selected {
+  background-color: rgba(56, 178, 172, 0.2) !important;
+  outline: 1px solid rgba(56, 178, 172, 0.5);
+  outline-offset: -1px;
+}
+
+/* Charge / Discharge icons in BAP & Program cells */
+.bap-icon {
+  display: inline-block;
+  font-size: 10px;
+  margin-right: 4px;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.bap-icon-charge {
+  color: #34d399;
+}
+
+.bap-icon-discharge {
+  color: #f87171;
+}
+
+/* Master-detail: hourly master rows vs quarter sub-rows */
+.ag-theme-alpine-dark .ag-row.ag-row-hour {
+  background-color: #1a1a2e;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ag-theme-alpine-dark .ag-row.ag-row-quarter {
+  background-color: rgba(15, 15, 28, 0.6);
+  font-size: 11px;
+}
+
+.ag-theme-alpine-dark .ag-row.ag-row-quarter .ag-cell {
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+.hour-expand-toggle {
+  display: inline-block;
+  width: 14px;
+  font-size: 10px;
+  color: #6b7280;
+  cursor: pointer;
+  user-select: none;
+}
+
+.hour-row-time {
+  cursor: pointer !important;
+}
+
+.hour-now-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #818cf8;
+  animation: pulse 2s infinite;
+  vertical-align: middle;
+  margin-right: 2px;
+}
+
+.quarter-indent {
+  padding-left: 18px;
+  color: #9ca3af;
+  font-size: 11px;
+}
+
+.quarter-readonly {
+  opacity: 0.45;
+  font-size: 11px;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
