@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { createAuthRoutes } from './auth.routes';
+import { createAutoMappingRoutes } from './autoMapping.routes';
 import { createFtpRoutes } from './ftp.routes';
 import { createConfigRoutes } from './config.routes';
 import { createScheduleRoutes } from './schedule.routes';
@@ -30,6 +31,7 @@ export async function createRoutes(): Promise<Router> {
   router.use('/config', createConfigRoutes(configStore, portalAuth));
   router.use('/schedule', createScheduleRoutes(ftpService, scheduleStore, configStore));
   router.use('/forecast', createForecastRoutes(forecastService));
+  router.use('/auto-mapping', createAutoMappingRoutes(ftpService, configStore));
 
   return router;
 }
