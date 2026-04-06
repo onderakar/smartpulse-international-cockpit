@@ -430,6 +430,7 @@ const T = {
   'autoMapping.confirmBody':           { tr: '{gcpCount} GCP ve {componentCount} bileşen tanımlı. Otomatik eşleştirme çalıştırılırsa mevcut yapılandırma silinecek.', en: '{gcpCount} GCPs and {componentCount} components are defined. Running Auto Mapping will replace the existing configuration.' },
   'autoMapping.confirmProceed':        { tr: 'Evet, Devam Et', en: 'Yes, Proceed' },
   'autoMapping.cancel':                { tr: 'İptal', en: 'Cancel' },
+  'autoMapping.close':                 { tr: 'Kapat', en: 'Close' },
   'autoMapping.modalTitle':            { tr: 'Otomatik Eşleştirme', en: 'Auto Mapping' },
   'autoMapping.done':                  { tr: 'Eşleştirme Tamamlandı', en: 'Mapping Complete' },
   'autoMapping.viewMapping':           { tr: "Mapping'i Görüntüle", en: 'View Mapping' },

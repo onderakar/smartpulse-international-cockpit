@@ -19,6 +19,7 @@ export interface AutoMappingState {
   warnings: AutoMappingWarning[]
   run: () => Promise<void>
   reset: () => void
+  cancel: () => void
 }
 
 const STEP_KEYS = [
@@ -159,5 +160,11 @@ export function useAutoMapping(onComplete: () => void): AutoMappingState {
     setWarnings([])
   }, [])
 
-  return { isRunning, isComplete, steps, logLines, report, warnings, run, reset }
+  const cancel = useCallback(() => {
+    abortRef.current?.abort()
+    setIsRunning(false)
+    setIsComplete(true)
+  }, [])
+
+  return { isRunning, isComplete, steps, logLines, report, warnings, run, reset, cancel }
 }

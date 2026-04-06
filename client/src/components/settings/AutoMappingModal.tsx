@@ -140,7 +140,14 @@ export function AutoMappingModal({ state, onClose }: Props) {
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-1">
-            {state.isComplete ? (
+            {!state.isComplete ? (
+              <button
+                onClick={state.cancel}
+                className="px-4 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold"
+              >
+                {t('autoMapping.cancel')}
+              </button>
+            ) : state.report ? (
               <button
                 onClick={onClose}
                 className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold"
@@ -149,10 +156,10 @@ export function AutoMappingModal({ state, onClose }: Props) {
               </button>
             ) : (
               <button
-                disabled
-                className="px-4 py-1.5 rounded bg-slate-700 text-slate-500 text-xs cursor-not-allowed"
+                onClick={onClose}
+                className="px-4 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold"
               >
-                {t('autoMapping.cancel')}
+                {t('autoMapping.close')}
               </button>
             )}
           </div>
