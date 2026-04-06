@@ -14,6 +14,16 @@ export interface BapSource {
   source: 'response.data.bap';
 }
 
+export interface BessParams {
+  maxDischargePowerMw: number;
+  maxChargePowerMw: number;
+  capacityMwh: number;
+  chargeEfficiency: number;
+  dischargeEfficiency: number;
+  minSocPct: number;
+  maxSocPct: number;
+}
+
 export type ComponentType = 'BESS' | 'SOLAR' | 'WIND' | 'HYDRO' | 'THERMAL' | 'LOAD' | 'OTHER';
 
 export interface GcpComponent {
@@ -35,6 +45,15 @@ export interface GcpComponent {
     masternode: string;
     metrics: Array<LabeledMetricMapping | BapSource>;
   };
+
+  // Auto-mapping attributes
+  bessParams?: BessParams;
+  /** BESS: maxDischargePowerMw. Phase 2 standalone: InstalledPowerMW. NOT set for SOLAR. */
+  installedCapacityMw?: number;
+  /** SOLAR only: AC-side capacity (PV_Capacity_MW_ac) */
+  installedCapacityAcMw?: number;
+  /** SOLAR only: DC peak capacity (PV_Capacity_MWp) */
+  installedCapacityDcMwp?: number;
 }
 
 export interface GridConnectionPoint {
@@ -45,6 +64,14 @@ export interface GridConnectionPoint {
   /** Default: 15 (quarter-hourly) */
   resolutionMinutes: MTUResolution;
   components: GcpComponent[];
+
+  // Auto-mapping attributes
+  /** Total_Grid_Capacity_Generation_MW */
+  maxInjectionMw?: number;
+  /** Total_Grid_Capacity_Consumption_MW */
+  maxConsumptionMw?: number;
+  /** Porfolio_ID_DAM_GEN (note: original CSV has typo, parser handles it) */
+  damPortfolioId?: string;
 }
 
 export interface CompanyMapping {
@@ -160,3 +187,38 @@ export function migrateAssetMapping(raw: any): AssetMapping {
   };
 }
 
+// ── Auto Mapping ──
+
+export interface AutoMappingReport {
+  gcpsCreated: number;
+  bessCreated: number;
+  solarCreated: number;
+  unmappedGcpsCreated: number;
+  warnings: AutoMappingWarning[];
+  skipped: AutoMappingSkipped[];
+  overallStatus: 'success' | 'partial' | 'failed';
+}
+
+export interface AutoMappingWarning {
+  type: 'duplicate_plant_id' | 'missing_asset_id' | 'name_conflict' | 'unknown_type' | 'parse_error';
+  message: string;
+  column?: string;
+}
+
+export interface AutoMappingSkipped {
+  plantId: number;
+  plantName: string;
+  reason: string;
+}
+
+export type AutoMappingEvent =
+  | { step: 'csv_read';     status: 'ok';     batteriesFound: number }
+  | { step: 'gcp_phase1';   status: 'ok';     name: string; bessPlantId: number; pvPlantId?: number }
+  | { step: 'phase1_done';  status: 'ok';     gcps: number; bess: number; solar: number }
+  | { step: 'portal_fetch'; status: 'ok';     plantsFound: number }
+  | { step: 'gcp_phase2';   status: 'ok';     name: string; plantId: number }
+  | { step: 'phase2_done';  status: 'ok';     unmappedGcps: number }
+  | { step: 'saved';        status: 'ok' }
+  | { step: 'done';         status: 'ok';     report: AutoMappingReport }
+  | { step: 'warning';      warnType: AutoMappingWarning['type']; i18nKey: string; params?: Record<string, string | number> }
+  | { step: 'error';        status: 'failed'; i18nKey: string };
