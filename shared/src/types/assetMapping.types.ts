@@ -160,18 +160,3 @@ export function migrateAssetMapping(raw: any): AssetMapping {
   };
 }
 
-// ── Backward-compat aliases (remove in Task 8) ──
-/** @deprecated Use GridConnectionPoint */
-export type UEVCB = GridConnectionPoint;
-/** @deprecated Use GcpComponent */
-export type UEVCBComponent = GcpComponent;
-/** @deprecated Use ComponentType */
-export type UEVCBComponentType = ComponentType;
-/** @deprecated Use getFirstGcp */
-export const getFirstUevcb = getFirstGcp;
-/** @deprecated Use getAllGcps */
-export const getAllUevcbs = getAllGcps;
-/** @deprecated Use getBessGcps */
-export const getBessUevcbs = getBessGcps;
-/** @deprecated Use BessGcpInfo */
-export type BessUevcbInfo = BessGcpInfo;
