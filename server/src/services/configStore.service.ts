@@ -104,7 +104,7 @@ export class ConfigStoreService {
         updatedAt: legacy.updatedAt || now,
       };
 
-      // Auto-migrate old single-UEVCB assetMapping format
+      // Auto-migrate old single-GCP assetMapping format
       if (groupProfile.assetMapping && !(groupProfile.assetMapping as any).companies && (groupProfile.assetMapping as any).uevcb) {
         groupProfile.assetMapping = migrateAssetMapping(groupProfile.assetMapping);
       }

@@ -21,12 +21,12 @@ export class MetadataService {
             const asset = await prisma.asset.upsert({
                 where: { id: plantId }, // By ID directly since plantId maps directly to our legacy structures
                 update: {
-                    name: `UEVCB_${plantId}`,
+                    name: `GCP_${plantId}`,
                     type: 'BATTERY'
                 },
                 create: {
                     id: plantId,
-                    name: `UEVCB_${plantId}`,
+                    name: `GCP_${plantId}`,
                     type: 'BATTERY',
                 },
             });

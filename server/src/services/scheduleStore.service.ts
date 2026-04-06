@@ -150,7 +150,7 @@ export class ScheduleStoreService {
     let hasChanges = true;
 
     db.data.schedules[storeKey] = {
-      uevcbPlantId: plantId,
+      gcpId: plantId,
       dateKey,
       slots,
       lastFetchedAt: Date.now(),
@@ -229,7 +229,7 @@ export class ScheduleStoreService {
     }
 
     db.data.schedules[storeKey] = {
-      uevcbPlantId: plantId,
+      gcpId: plantId,
       dateKey,
       slots,
       lastFetchedAt: now,
@@ -311,7 +311,7 @@ export class ScheduleStoreService {
       console.log(`[ScheduleStore] recordUserSave: plantId=${plantId} dateKey=${dateKey} — ${savedCount} new user_save revisions (${dateRows.length} rows total)`);
 
       db.data.schedules[storeKey] = {
-        uevcbPlantId: plantId,
+        gcpId: plantId,
         dateKey,
         slots,
         lastFetchedAt: now,
