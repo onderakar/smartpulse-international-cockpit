@@ -3,6 +3,7 @@ import { useProfile } from '../../context/ProfileContext';
 import { useAuth } from '../../context/AuthContext';
 import { useLocale } from '../../context/LocaleContext';
 import { PlantSelector } from './PlantSelector';
+import { AutoMappingButton } from './AutoMappingButton';
 import {
   AssetMapping, CompanyMapping, GridConnectionPoint, GcpComponent,
   LabeledMetricMapping, BapSource, ComponentType,
@@ -156,6 +157,11 @@ export function AssetMappingForm() {
     const comps = [...companies[companyIdx].gridConnectionPoints[gcpIdx].components];
     comps[compIdx] = { ...comps[compIdx], ...patch };
     updateGcp(companyIdx, gcpIdx, { components: comps });
+  };
+
+  // --- Auto Mapping ---
+  const handleMappingComplete = () => {
+    window.location.reload();
   };
 
   // --- Save ---
@@ -410,6 +416,10 @@ export function AssetMappingForm() {
 
         {/* Save button */}
         <div className="flex items-center gap-4">
+          <AutoMappingButton
+            companies={companies}
+            onMappingComplete={handleMappingComplete}
+          />
           <button
             onClick={handleSave}
             className="bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium px-6 py-2 rounded-lg transition-colors"
