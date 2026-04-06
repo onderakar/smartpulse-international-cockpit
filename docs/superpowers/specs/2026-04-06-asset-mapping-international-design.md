@@ -21,7 +21,7 @@ Adapt the Settings Asset Mapping form and its underlying types for the internati
 |-----|-----|
 | `UEVCB` | `GridConnectionPoint` |
 | `uevcbId` | `id` (`number`, user-entered, for future portal GCP binding) |
-| `UEVCBComponent` | `Component` |
+| `UEVCBComponent` | `GcpComponent` (avoids collision with React.Component) |
 | `UEVCBComponentType` | `ComponentType` |
 | `BessUevcbInfo` | `BessGcpInfo` |
 
