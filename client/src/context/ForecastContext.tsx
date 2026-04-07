@@ -29,6 +29,12 @@ interface CachedForecastData {
   osos?: MetricDataPoint[];
 }
 
+interface ForecastRequest {
+  componentId: string
+  label: string
+  promise: Promise<ForecastResponse>
+}
+
 const forecastCache = new Map<string, CachedForecastData>();
 
 function buildCacheKey(gcpId: string, dateKey: string): string {
@@ -162,11 +168,6 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
     setLoading(true);
 
     // Component forecasts — one request per subcomponent plant ID, tagged with componentId for grouping
-    interface ForecastRequest {
-      componentId: string
-      label: string
-      promise: Promise<ForecastResponse>
-    }
     const requests: ForecastRequest[] = []
 
     for (const comp of activeGcp.components) {
@@ -297,7 +298,9 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
       setIlkKgupData(foundIlkKgup);
       setRkgupData(foundRkgup);
       setOsosData(foundOsos);
-      setLoading(false);
+    })
+    .finally(() => {
+      if (fetchId === fetchIdRef.current) setLoading(false);
     });
 
     return () => { fetchIdRef.current++; }; // cancel stale
