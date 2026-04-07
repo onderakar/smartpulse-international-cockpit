@@ -154,11 +154,12 @@ export function ForecastPage() {
 
         // Add child components
         for (const comp of gcp.components) {
-          if (comp.portalPlantId > 0 && !seenIds.has(comp.portalPlantId)) {
-            seenIds.add(comp.portalPlantId);
+          const plantId = comp.generation?.portalPlantId ?? comp.consumption?.portalPlantId ?? comp.portalPlantId ?? 0
+          if (plantId > 0 && !seenIds.has(plantId)) {
+            seenIds.add(plantId);
             children.push({
               companyId: company.companyId,
-              plantId: comp.portalPlantId,
+              plantId,
               displayName: comp.displayName,
               isParent: false,
               resolutionMinutes: gcp.resolutionMinutes ?? 60,

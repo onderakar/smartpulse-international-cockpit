@@ -167,12 +167,13 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
 
     // Component forecasts
     for (const comp of activeGcp.components) {
-      if (comp.forecastPreference?.sourceName && comp.portalPlantId > 0) {
+      const plantId = comp.generation?.portalPlantId ?? comp.consumption?.portalPlantId ?? comp.portalPlantId ?? 0
+      if (comp.forecastPreference?.sourceName && plantId > 0) {
         requests.push({
           label: `${comp.displayName} Forecast`,
           promise: forecastApi.getValues({
             companyId,
-            powerPlantId: comp.portalPlantId,
+            powerPlantId: plantId,
             provider: comp.forecastPreference.sourceName,
             startDate: dayStr,
             endDate: dayStr,

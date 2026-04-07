@@ -26,9 +26,10 @@ export function BatteryParamsPage() {
     for (const company of mapping.companies) {
       for (const gcp of company.gridConnectionPoints) {
         for (const comp of gcp.components) {
-          if (comp.type === 'BESS' && comp.portalPlantId > 0) {
+          const plantId = comp.generation?.portalPlantId ?? comp.consumption?.portalPlantId ?? comp.portalPlantId ?? 0
+          if (comp.type === 'BESS' && plantId > 0) {
             result.push({
-              plantId: comp.portalPlantId,
+              plantId,
               parentPlantId: gcp.id,
               csvColumnKey: null, // resolved after CSV loads
               displayName: comp.displayName,

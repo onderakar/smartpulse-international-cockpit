@@ -364,7 +364,7 @@ export function AssetMappingForm() {
                                         key={comp.componentId}
                                         comp={comp}
                                         companyPlantIds={companyPlantIds}
-                                        excludePlantIds={gcp.components.filter((_, i) => i !== compIdx).map(c => c.portalPlantId).filter(Boolean)}
+                                        excludePlantIds={gcp.components.filter((_, i) => i !== compIdx).map(c => c.generation?.portalPlantId ?? c.consumption?.portalPlantId ?? c.portalPlantId).filter((id): id is number => !!id)}
                                         onChange={(patch) => updateComponent(cIdx, gIdx, compIdx, patch)}
                                         onRemove={() => handleRemoveComponent(cIdx, gIdx, compIdx)}
                                       />
