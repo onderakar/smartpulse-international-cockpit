@@ -20,9 +20,9 @@ import { forecastApi } from '../api/forecast.api';
 
 // Temporary type definition until widget is implemented
 interface ForecastSeriesItem {
-  seriesId: string;
-  displayName: string;
+  label: string;
   data: MetricDataPoint[];
+  color: string;
 }
 
 /** Forecasts are refreshed from SmartPulse Portal every 15 minutes */
