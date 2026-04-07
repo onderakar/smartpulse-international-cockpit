@@ -10,6 +10,7 @@ import {
   migrateAssetMapping,
 } from '@shared/types/assetMapping.types';
 import { MTUResolution } from '@shared/types/plant.types';
+import { configApi } from '../../api/config.api';
 
 export function AssetMappingForm() {
   const { profile, updateProfile } = useProfile();
@@ -180,10 +181,16 @@ export function AssetMappingForm() {
   };
 
   // --- Clear all ---
-  const handleClearAll = () => {
+  const handleClearAll = async () => {
+    if (!profile) return;
+    const cleared = { ...profile, assetMapping: { companies: [], ftpDirection, ftpFilename } };
     setCompanies([]);
-    updateProfile({ assetMapping: { companies: [], ftpDirection, ftpFilename } });
     setShowClearConfirm(false);
+    try {
+      await configApi.saveProfile(cleared, true /* forceMapping */);
+    } catch (err) {
+      console.error('[AssetMappingForm] clearAll failed:', err);
+    }
   };
 
   // Available companies not yet added

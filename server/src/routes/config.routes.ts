@@ -23,7 +23,7 @@ export function createConfigRoutes(
   // POST /api/config/profile
   router.post('/profile', sessionAuth, async (req, res, next) => {
     try {
-      const { profile } = req.body;
+      const { profile, forceMapping = false } = req.body;
 
       if (!profile) {
         return res.status(400).json({
@@ -33,7 +33,7 @@ export function createConfigRoutes(
       }
 
       const { username, groupId } = req.session.portalSession!;
-      await configStore.saveProfile(username, profile, String(groupId));
+      await configStore.saveProfile(username, profile, String(groupId), forceMapping);
       res.json({ success: true, profileId: username });
     } catch (err: any) {
       if (err.message?.startsWith('MAPPING_DELETE_BLOCKED')) {

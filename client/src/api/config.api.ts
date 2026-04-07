@@ -8,8 +8,8 @@ export const configApi = {
     return data.profile;
   },
 
-  async saveProfile(profile: DashboardProfile): Promise<{ success: boolean; profileId: string }> {
-    const { data } = await apiClient.post('/config/profile', { profile });
+  async saveProfile(profile: DashboardProfile, forceMapping = false): Promise<{ success: boolean; profileId: string }> {
+    const { data } = await apiClient.post('/config/profile', { profile, forceMapping });
     return data;
   },
 

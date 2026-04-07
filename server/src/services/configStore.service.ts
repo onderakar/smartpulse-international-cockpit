@@ -238,7 +238,7 @@ export class ConfigStoreService {
   /**
    * Save a merged DashboardProfile by splitting it into group + user parts.
    */
-  async saveProfile(username: string, profile: DashboardProfile, groupId?: string): Promise<void> {
+  async saveProfile(username: string, profile: DashboardProfile, groupId?: string, forceMapping = false): Promise<void> {
     const resolvedGroupId = groupId || profile.groupId;
     if (!resolvedGroupId) {
       throw new Error('Cannot save profile without groupId');
@@ -249,10 +249,10 @@ export class ConfigStoreService {
     // Split and save group fields
     const existingGroup = await this.loadGroupProfile(resolvedGroupId);
 
-    // Guard: prevent accidental mapping deletion
+    // Guard: prevent accidental mapping deletion (bypass with forceMapping flag)
     const existingCompanyCount = existingGroup?.assetMapping?.companies?.length ?? 0;
     const incomingCompanyCount = profile.assetMapping?.companies?.length ?? 0;
-    if (existingCompanyCount > 0 && incomingCompanyCount === 0) {
+    if (!forceMapping && existingCompanyCount > 0 && incomingCompanyCount === 0) {
       throw new Error('MAPPING_DELETE_BLOCKED: Cannot clear asset mapping that has companies. Remove companies individually or use force flag.');
     }
 
