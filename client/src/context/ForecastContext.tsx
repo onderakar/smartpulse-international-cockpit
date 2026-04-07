@@ -15,7 +15,15 @@ import { getAllGcps } from '@shared/types/assetMapping.types';
 import { MetricDataPoint, FORECAST_COLORS } from '@smartpulse-intl/shared';
 import { ForecastResponse } from '@smartpulse-intl/shared';
 import { forecastApi } from '../api/forecast.api';
-import type { ForecastSeriesItem } from '../components/widgets/LiveMonitoringWidget/LiveChart';
+// TODO: Uncomment when LiveMonitoringWidget/LiveChart is implemented
+// import type { ForecastSeriesItem } from '../components/widgets/LiveMonitoringWidget/LiveChart';
+
+// Temporary type definition until widget is implemented
+interface ForecastSeriesItem {
+  seriesId: string;
+  displayName: string;
+  data: MetricDataPoint[];
+}
 
 /** Forecasts are refreshed from SmartPulse Portal every 15 minutes */
 const FORECAST_POLL_INTERVAL_MS = 15 * 60 * 1000;
