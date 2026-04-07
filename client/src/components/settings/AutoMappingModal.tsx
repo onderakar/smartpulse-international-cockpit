@@ -2,10 +2,12 @@ import { useEffect, useRef } from 'react'
 import { useLocale } from '../../context/LocaleContext'
 import { TranslationKey } from '@shared/constants/translations'
 import { AutoMappingState, StepStatus } from '../../hooks/useAutoMapping'
+import { CompanyMapping } from '@shared/types/assetMapping.types'
 
 interface Props {
   state: AutoMappingState
   onClose: () => void
+  companies?: CompanyMapping[]
 }
 
 const STATUS_ICON: Record<StepStatus, string> = {
@@ -22,8 +24,13 @@ const STATUS_COLOR: Record<StepStatus, string> = {
   error:   'text-red-400',
 }
 
-export function AutoMappingModal({ state, onClose }: Props) {
+export function AutoMappingModal({ state, onClose, companies = [] }: Props) {
   const { t } = useLocale()
+
+  const gcpCount = companies.reduce((sum, c) => sum + (c.gridConnectionPoints?.length ?? 0), 0)
+  const componentCount = companies.reduce((sum, c) =>
+    sum + (c.gridConnectionPoints ?? []).reduce((s, g) => s + (g.components?.length ?? 0), 0), 0
+  )
   const logRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -41,7 +48,7 @@ export function AutoMappingModal({ state, onClose }: Props) {
             <span className="font-semibold text-sm text-slate-100">{t('autoMapping.modalTitle')}</span>
           </div>
           <div className="p-5 space-y-4">
-            <p className="text-sm text-slate-300">{t('autoMapping.confirmBody')}</p>
+            <p className="text-sm text-slate-300">{t('autoMapping.confirmBody', { gcpCount, componentCount })}</p>
             <div className="flex justify-end gap-2 pt-1">
               <button
                 onClick={onClose}

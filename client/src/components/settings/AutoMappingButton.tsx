@@ -36,6 +36,7 @@ export function AutoMappingButton({ companies, onMappingComplete }: Props) {
         <AutoMappingModal
           state={mappingState}
           onClose={handleModalClose}
+          companies={companies}
         />
       )}
     </>
