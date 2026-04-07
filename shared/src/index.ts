@@ -9,4 +9,7 @@ export * from './types/schedule.types';
 export * from './types/forecast.types';
 
 // Constants
-export * from './constants/defaults';
+export * from './constants/defaults'
+
+// Utils
+export { sumForecastSeries } from './utils/forecastAggregation';
