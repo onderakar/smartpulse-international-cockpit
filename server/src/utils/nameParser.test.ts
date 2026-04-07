@@ -16,14 +16,14 @@ describe('extractDirectionFromName', () => {
     ['Bagrentsi BESS Con', 'con'],
     ['Bagrentsi BESS Consumption', 'con'],
     ['Bagrentsi BESS CON', 'con'],
-    ['Bagrentsi BESS', null],
-    ['Bagrentsi Asset', null],
+    ['Bagrentsi BESS', 'none'],      // no direction keyword → direct mapping
+    ['Bagrentsi Asset', 'none'],     // no direction keyword → direct mapping
   ])('"%s" → %s', (name, expected) => {
     expect(extractDirectionFromName(name)).toBe(expected)
   })
 
-  test('returns null and is ambiguous when both gen and con present', () => {
-    expect(extractDirectionFromName('BESS Gen Con')).toBeNull()
+  test('returns "ambiguous" when both gen and con are present', () => {
+    expect(extractDirectionFromName('BESS Gen Con')).toBe('ambiguous')
   })
 })
 
@@ -104,14 +104,23 @@ describe('groupPlantsByGcp', () => {
     expect(gcpGroup.gcpDisplayName.toLowerCase()).toContain('bagrentsi')
   })
 
-  test('standalone plant without direction keyword is assigned to gen slot', () => {
+  test('standalone plant without direction keyword gets direction "none"', () => {
     const standalone: PortalPlantEntry[] = [
       { plantId: 200, plantName: 'Meridian BESS', installedPowerMw: 8, companyId: 1, companyName: 'C1' },
     ]
     const groups = groupPlantsByGcp(standalone)
     const gcpGroup = [...groups.values()][0]
     const compGroup = [...gcpGroup.components.values()][0]
-    expect(compGroup.plants[0].direction).toBeNull()
+    expect(compGroup.plants[0].direction).toBe('none')
+  })
+
+  test('gcpDisplayName is derived from plant name even when no direction keyword (direct mapping)', () => {
+    const standalone: PortalPlantEntry[] = [
+      { plantId: 200, plantName: 'Meridian BESS', installedPowerMw: 8, companyId: 1, companyName: 'C1' },
+    ]
+    const groups = groupPlantsByGcp(standalone)
+    const gcpGroup = [...groups.values()][0]
+    expect(gcpGroup.gcpDisplayName.toLowerCase()).toContain('meridian')
   })
 
   test('two BESS units at same site create two component groups', () => {

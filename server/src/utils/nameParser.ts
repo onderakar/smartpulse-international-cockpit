@@ -19,17 +19,22 @@ function resetRegex(...regexes: RegExp[]) {
   regexes.forEach(r => { r.lastIndex = 0 })
 }
 
-/** Returns 'gen', 'con', or null (null means no keyword OR ambiguous — both present). */
-export function extractDirectionFromName(name: string): 'gen' | 'con' | null {
+/** Returns the direction keyword found in the name.
+ *  'gen'       → gen/generation keyword found
+ *  'con'       → con/consumption keyword found
+ *  'none'      → no direction keyword (direct component-level mapping)
+ *  'ambiguous' → both gen and con found in same name (warning case)
+ */
+export function extractDirectionFromName(name: string): 'gen' | 'con' | 'none' | 'ambiguous' {
   resetRegex(DIR_GEN, DIR_CON)
   const hasGen = DIR_GEN.test(name)
   resetRegex(DIR_GEN, DIR_CON)
   const hasCon = DIR_CON.test(name)
   resetRegex(DIR_GEN, DIR_CON)
-  if (hasGen && hasCon) return null
+  if (hasGen && hasCon) return 'ambiguous'
   if (hasGen) return 'gen'
   if (hasCon) return 'con'
-  return null
+  return 'none'
 }
 
 /** Returns the dominant component type keyword found in the name, or null. */
@@ -98,8 +103,8 @@ export interface PortalPlantEntry {
 
 export interface PlantSubComponentEntry {
   plant: PortalPlantEntry
-  /** null means no direction keyword found OR ambiguous (both gen+con) */
-  direction: 'gen' | 'con' | null
+  /** Direction inferred from plant name keywords */
+  direction: 'gen' | 'con' | 'none' | 'ambiguous'
 }
 
 export interface ComponentGroup {
@@ -144,17 +149,29 @@ export function groupPlantsByGcp(plants: PortalPlantEntry[]): Map<string, PlantG
     gcpGroup.components.get(compKey)!.plants.push({ plant, direction })
   }
 
-  // Post-process: set gcpDisplayName from gen-side plant name (preferred)
+  // Post-process: set gcpDisplayName from gen-side plant name (preferred),
+  // falling back to 'none'-direction (direct-mapped) plants
   for (const gcpGroup of gcpGroups.values()) {
+    let found = false
+    // Prefer gen-side
     outer: for (const compGroup of gcpGroup.components.values()) {
       for (const entry of compGroup.plants) {
         if (entry.direction === 'gen') {
-          // Strip direction and type keywords to get the location name
           const locationName = stripTypeKeywords(stripDirectionKeywords(entry.plant.plantName)).trim()
-          if (locationName) {
-            gcpGroup.gcpDisplayName = locationName
-          }
+          if (locationName) { gcpGroup.gcpDisplayName = locationName; found = true }
           break outer
+        }
+      }
+    }
+    // Fallback: use direct-mapped ('none') plant name
+    if (!found) {
+      outer2: for (const compGroup of gcpGroup.components.values()) {
+        for (const entry of compGroup.plants) {
+          if (entry.direction === 'none') {
+            const locationName = stripTypeKeywords(entry.plant.plantName).trim()
+            if (locationName) { gcpGroup.gcpDisplayName = locationName }
+            break outer2
+          }
         }
       }
     }
