@@ -24,18 +24,36 @@ export interface BessParams {
   maxSocPct: number;
 }
 
+export interface GcpSubComponent {
+  /** Portal plant ID for this directional side */
+  portalPlantId: number;
+  /** MW capacity from portal InstalledPowerMW */
+  installedPowerMw?: number;
+  /** Canonical portal plant name (for display/audit) */
+  portalPlantName?: string;
+}
+
 export type ComponentType = 'BESS' | 'SOLAR' | 'WIND' | 'HYDRO' | 'THERMAL' | 'LOAD' | 'OTHER';
 
 export interface GcpComponent {
   componentId: string;
   type: ComponentType;
   displayName: string;
-  portalPlantId: number;
+
+  /** Generation-side portal plant (preferred for forecast/schedule) */
+  generation?: GcpSubComponent;
+  /** Consumption-side portal plant */
+  consumption?: GcpSubComponent;
+  /**
+   * @deprecated Use generation.portalPlantId. Kept for migration compatibility.
+   * Old format components that only have portalPlantId are migrated on load.
+   */
+  portalPlantId?: number;
+
   forecastPreference: {
     sourceName: string;
     beforeMinutes: number;
   };
-
   scheduleId?: string;
   /** Template pattern for schedule FTP filename, e.g. "Battery_Schedule_{GCP_ID}.csv"
    *  Supported placeholders: {GCP_ID}, {ASSET_ID}, {SCHEDULE_ID}, {GCP_NAME} */
@@ -48,7 +66,7 @@ export interface GcpComponent {
 
   // Auto-mapping attributes
   bessParams?: BessParams;
-  /** BESS: maxDischargePowerMw. Phase 2 standalone: InstalledPowerMW. NOT set for SOLAR. */
+  /** BESS: maxDischargePowerMw. Phase 2 standalone: InstalledPowerMW. */
   installedCapacityMw?: number;
   /** SOLAR only: AC-side capacity (PV_Capacity_MW_ac) */
   installedCapacityAcMw?: number;
@@ -118,7 +136,7 @@ export function getBessGcps(mapping: AssetMapping | null | undefined): BessGcpIn
   for (const company of mapping.companies) {
     for (const gcp of (company.gridConnectionPoints || [])) {
       for (const comp of gcp.components) {
-        if (comp.type === 'BESS' && comp.portalPlantId > 0) {
+        if (comp.type === 'BESS' && ((comp.generation?.portalPlantId ?? 0) > 0 || (comp.portalPlantId ?? 0) > 0)) {
           result.push({
             gcpId: gcp.id,
             gcpName: gcp.name,
@@ -132,13 +150,35 @@ export function getBessGcps(mapping: AssetMapping | null | undefined): BessGcpIn
   return result;
 }
 
+function migrateComponent(comp: any): GcpComponent {
+  // If component has old single portalPlantId but no generation sub-component, migrate it
+  if (comp.portalPlantId && !comp.generation) {
+    return {
+      ...comp,
+      generation: {
+        portalPlantId: comp.portalPlantId,
+        installedPowerMw: comp.installedCapacityMw,
+      },
+    } as GcpComponent;
+  }
+  return comp as GcpComponent;
+}
+
 /** Migrate old AssetMapping formats to current format. */
 export function migrateAssetMapping(raw: any): AssetMapping {
   // Already in current format
   if (raw?.companies && Array.isArray(raw.companies)) {
     // Migrate uevcbs → gridConnectionPoints if needed
     const companies = raw.companies.map((c: any) => {
-      if (c.gridConnectionPoints) return c;
+      if (c.gridConnectionPoints) {
+        return {
+          ...c,
+          gridConnectionPoints: (c.gridConnectionPoints || []).map((gcp: any) => ({
+            ...gcp,
+            components: (gcp.components || []).map(migrateComponent),
+          })),
+        };
+      }
       if (c.uevcbs) {
         return {
           ...c,
@@ -150,7 +190,7 @@ export function migrateAssetMapping(raw: any): AssetMapping {
               name: u.name,
               timezone: u.timezone,
               resolutionMinutes: u.resolutionMinutes ?? 15,
-              components: u.components || [],
+              components: (u.components || []).map(migrateComponent),
             };
           }),
           uevcbs: undefined,
@@ -173,7 +213,7 @@ export function migrateAssetMapping(raw: any): AssetMapping {
           name: u.name || 'Migrated',
           timezone: u.timezone || 'UTC',
           resolutionMinutes: u.resolutionMinutes ?? 15,
-          components: u.components || [],
+          components: (u.components || []).map(migrateComponent),
         }],
       }],
       ftpDirection: raw.ftpDirection || 'incoming',
@@ -190,19 +230,42 @@ export function migrateAssetMapping(raw: any): AssetMapping {
 // ── Auto Mapping ──
 
 export interface AutoMappingReport {
+  // Phase 1 stats
+  csvBatteriesFound: number;
+  phase1GcpsCreated: number;
+  phase1BessComponents: number;
+  phase1GenSubComponents: number;
+  phase1ConSubComponents: number;
+  phase1NameGroupsFound: number;
+  phase1AmbiguousNames: number;
+  // Phase 2 stats
+  phase2Ran: boolean;
+  phase2PlantsScanned: number;
+  phase2GcpsCreated: number;
+  phase2StandaloneFound: number;
+  phase2GroupedFound: number;
+  // Totals (backward-compatible)
   gcpsCreated: number;
-  bessCreated: number;
-  solarCreated: number;
-  unmappedGcpsCreated: number;
   warnings: AutoMappingWarning[];
   skipped: AutoMappingSkipped[];
   overallStatus: 'success' | 'partial' | 'failed';
 }
 
 export interface AutoMappingWarning {
-  type: 'duplicate_plant_id' | 'missing_asset_id' | 'name_conflict' | 'unknown_type' | 'parse_error';
+  type:
+    | 'duplicate_plant_id'
+    | 'missing_asset_id'
+    | 'name_conflict'
+    | 'unknown_type'
+    | 'parse_error'
+    | 'ambiguous_direction'
+    | 'missing_portal_plant'
+    | 'no_gen_or_con_keyword'
+    | 'duplicate_direction';
   message: string;
   column?: string;
+  plantId?: number;
+  plantName?: string;
 }
 
 export interface AutoMappingSkipped {
@@ -212,13 +275,25 @@ export interface AutoMappingSkipped {
 }
 
 export type AutoMappingEvent =
-  | { step: 'csv_read';     status: 'ok';     batteriesFound: number }
-  | { step: 'gcp_phase1';   status: 'ok';     name: string; bessPlantId: number; pvPlantId?: number }
-  | { step: 'phase1_done';  status: 'ok';     gcps: number; bess: number; solar: number }
-  | { step: 'portal_fetch'; status: 'ok';     plantsFound: number }
-  | { step: 'gcp_phase2';   status: 'ok';     name: string; plantId: number }
-  | { step: 'phase2_done';  status: 'ok';     unmappedGcps: number }
-  | { step: 'saved';        status: 'ok' }
-  | { step: 'done';         status: 'ok';     report: AutoMappingReport }
-  | { step: 'warning';      warnType: AutoMappingWarning['type']; i18nKey: string; params?: Record<string, string | number> }
-  | { step: 'error';        status: 'failed'; i18nKey: string };
+  | { step: 'portal_fetch'; status: 'ok'; plantsFound: number }
+  | { step: 'csv_read'; status: 'ok'; batteriesFound: number }
+  | { step: 'gcp_phase1'; status: 'ok';
+      gcpName: string; gcpRoot: string;
+      genPlantId?: number; conPlantId?: number;
+      companionComponents: number }
+  | { step: 'phase1_done'; status: 'ok';
+      gcps: number; bessComponents: number;
+      genSubComponents: number; conSubComponents: number;
+      nameGroupsFound: number; ambiguousNames: number }
+  | { step: 'phase2_scan'; status: 'ok'; plantsScanned: number }
+  | { step: 'gcp_phase2'; status: 'ok';
+      name: string; plantCount: number; genCount: number; conCount: number }
+  | { step: 'phase2_done'; status: 'ok';
+      gcpsCreated: number; standalone: number; grouped: number }
+  | { step: 'saved'; status: 'ok' }
+  | { step: 'done'; status: 'ok'; report: AutoMappingReport }
+  | { step: 'warning';
+      warnType: AutoMappingWarning['type'];
+      i18nKey: string;
+      params?: Record<string, string | number> }
+  | { step: 'error'; status: 'failed'; i18nKey: string }
