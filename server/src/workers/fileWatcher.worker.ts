@@ -1,7 +1,6 @@
 import { watch } from 'fs';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { MetadataService } from '../services/metadata.service';
 import { envConfig } from '../config/env';
 
 export class FileWatcherWorker {
@@ -42,8 +41,8 @@ export class FileWatcherWorker {
 
                             // If this is the Technical Parameters file
                             if (filename.toLowerCase().includes('technical_parameters')) {
-                                await MetadataService.syncTechParamsToDb(content);
-                                console.log(`[FileWatcherWorker] Successfully updated Asset Metadata from ${filename}`);
+                                // TODO: sync metadata when Prisma/DB integration is set up
+                                console.log(`[FileWatcherWorker] Detected Technical_Parameters update: ${filename}`);
                             }
                             // Add parsing for battery plans, OSOS CSVs etc. here
                         }
