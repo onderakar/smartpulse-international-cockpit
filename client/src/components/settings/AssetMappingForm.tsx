@@ -546,6 +546,7 @@ function ComponentEditor({ comp, companyPlantIds, excludePlantIds, onChange, onR
             <option value="HYDRO">HYDRO</option>
             <option value="THERMAL">THERMAL</option>
             <option value="LOAD">LOAD</option>
+            <option value="CONSUMPTION">CONSUMPTION</option>
             <option value="OTHER">OTHER</option>
           </select>
         </div>
@@ -572,16 +573,18 @@ function ComponentEditor({ comp, companyPlantIds, excludePlantIds, onChange, onR
           onClear={() => onChange({ portalPlantId: undefined })}
         />
 
-        <PlantSelector
-          label={t('assetMapping.generationPlant')}
-          selectedPlantId={comp.generation?.portalPlantId ?? null}
-          filterPlantIds={companyPlantIds.length > 0 ? companyPlantIds : undefined}
-          excludePlantIds={excludePlantIds}
-          onSelect={(p) => onChange({
-            generation: { ...(comp.generation ?? {}), portalPlantId: p.id },
-          })}
-          onClear={() => onChange({ generation: undefined })}
-        />
+        {comp.type !== 'CONSUMPTION' && (
+          <PlantSelector
+            label={t('assetMapping.generationPlant')}
+            selectedPlantId={comp.generation?.portalPlantId ?? null}
+            filterPlantIds={companyPlantIds.length > 0 ? companyPlantIds : undefined}
+            excludePlantIds={excludePlantIds}
+            onSelect={(p) => onChange({
+              generation: { ...(comp.generation ?? {}), portalPlantId: p.id },
+            })}
+            onClear={() => onChange({ generation: undefined })}
+          />
+        )}
 
         <PlantSelector
           label={t('assetMapping.consumptionPlant')}

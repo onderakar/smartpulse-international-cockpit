@@ -33,7 +33,7 @@ export interface GcpSubComponent {
   portalPlantName?: string;
 }
 
-export type ComponentType = 'BESS' | 'SOLAR' | 'WIND' | 'HYDRO' | 'THERMAL' | 'LOAD' | 'OTHER';
+export type ComponentType = 'BESS' | 'SOLAR' | 'WIND' | 'HYDRO' | 'THERMAL' | 'LOAD' | 'CONSUMPTION' | 'OTHER';
 
 export interface GcpComponent {
   componentId: string;
