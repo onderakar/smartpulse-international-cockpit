@@ -163,7 +163,7 @@ export function ForecastPage() {
                 plantId: comp.portalPlantId,
                 displayName: comp.displayName,
                 isParent: false,
-                resolutionMinutes: gcp.resolutionMinutes ?? 60,
+                resolutionMinutes: gcp.resolutionMinutes ?? 15,
               });
             }
             continue;
@@ -177,7 +177,7 @@ export function ForecastPage() {
               plantId: comp.generation.portalPlantId,
               displayName: `${comp.displayName} (Gen)`,
               isParent: false,
-              resolutionMinutes: gcp.resolutionMinutes ?? 60,
+              resolutionMinutes: gcp.resolutionMinutes ?? 15,
             });
           }
           if (comp.consumption?.portalPlantId && !seenIds.has(comp.consumption.portalPlantId)) {
@@ -187,7 +187,7 @@ export function ForecastPage() {
               plantId: comp.consumption.portalPlantId,
               displayName: `${comp.displayName} (Con)`,
               isParent: false,
-              resolutionMinutes: gcp.resolutionMinutes ?? 60,
+              resolutionMinutes: gcp.resolutionMinutes ?? 15,
             });
           }
         }
@@ -197,7 +197,7 @@ export function ForecastPage() {
             gcpId: gcp.id,
             gcpName: gcp.name,
             companyId: company.companyId,
-            resolutionMinutes: gcp.resolutionMinutes ?? 60,
+            resolutionMinutes: gcp.resolutionMinutes ?? 15,
             children,
           });
         }
@@ -224,7 +224,7 @@ export function ForecastPage() {
   const [providers, setProviders] = useState<{ ProviderId: string; ProviderName: string }[]>([]);
 
   const selectedPlant = allPlants.find(b => b.plantId === selectedPlantId) ?? null;
-  const resolution = selectedPlant?.resolutionMinutes ?? 60;
+  const resolution = selectedPlant?.resolutionMinutes ?? 15;
 
   // Live clock
   const [nowStr, setNowStr] = useState(nowLocalIso);
