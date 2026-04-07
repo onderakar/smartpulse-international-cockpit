@@ -152,15 +152,40 @@ export function ForecastPage() {
         const children: ForecastPlantItem[] = [];
         const seenIds = new Set<number>();
 
-        // Add child components
+        // Add child components — direct-mapped get one entry; gen+con get separate entries
         for (const comp of gcp.components) {
-          const plantId = comp.generation?.portalPlantId ?? comp.consumption?.portalPlantId ?? comp.portalPlantId ?? 0
-          if (plantId > 0 && !seenIds.has(plantId)) {
-            seenIds.add(plantId);
+          // Direct-mapped component (single portal plant, no gen/con subcomponents)
+          if (comp.portalPlantId && !comp.generation && !comp.consumption) {
+            if (!seenIds.has(comp.portalPlantId)) {
+              seenIds.add(comp.portalPlantId);
+              children.push({
+                companyId: company.companyId,
+                plantId: comp.portalPlantId,
+                displayName: comp.displayName,
+                isParent: false,
+                resolutionMinutes: gcp.resolutionMinutes ?? 60,
+              });
+            }
+            continue;
+          }
+
+          // Subcomponent-mapped: gen and/or con as separate selectable entries
+          if (comp.generation?.portalPlantId && !seenIds.has(comp.generation.portalPlantId)) {
+            seenIds.add(comp.generation.portalPlantId);
             children.push({
               companyId: company.companyId,
-              plantId,
-              displayName: comp.displayName,
+              plantId: comp.generation.portalPlantId,
+              displayName: `${comp.displayName} (Gen)`,
+              isParent: false,
+              resolutionMinutes: gcp.resolutionMinutes ?? 60,
+            });
+          }
+          if (comp.consumption?.portalPlantId && !seenIds.has(comp.consumption.portalPlantId)) {
+            seenIds.add(comp.consumption.portalPlantId);
+            children.push({
+              companyId: company.companyId,
+              plantId: comp.consumption.portalPlantId,
+              displayName: `${comp.displayName} (Con)`,
               isParent: false,
               resolutionMinutes: gcp.resolutionMinutes ?? 60,
             });
@@ -253,7 +278,11 @@ export function ForecastPage() {
           for (const gcp of company.gridConnectionPoints) {
             if (gcp.id === gcpId) {
               gcpTimezone = gcp.timezone || 'UTC';
-              const comp = gcp.components.find(c => c.portalPlantId === selectedPlantId);
+              const comp = gcp.components.find(c =>
+                c.portalPlantId === selectedPlantId ||
+                c.generation?.portalPlantId === selectedPlantId ||
+                c.consumption?.portalPlantId === selectedPlantId
+              );
               if (comp) targetComponentId = comp.componentId;
             }
           }
