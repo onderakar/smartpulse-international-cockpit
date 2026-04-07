@@ -14,6 +14,7 @@ export function createAutoMappingRoutes(
   // POST /api/auto-mapping/run  — SSE stream
   router.post('/run', sessionAuth, async (req, res) => {
     const session = req.session.portalSession!
+    const { runPhase2 = false } = req.body as { runPhase2?: boolean }
 
     // Load current group profile; fall back to empty profile when none exists yet
     const profile: GroupProfile = (await configStore.loadGroupProfile(String(session.groupId))) ?? {
@@ -37,7 +38,7 @@ export function createAutoMappingRoutes(
     }
 
     try {
-      await runAutoMapping(session, profile, ftpService, configStore, emit)
+      await runAutoMapping(session, profile, ftpService, configStore, runPhase2, emit)
     } catch (err: any) {
       emit({ step: 'error', status: 'failed', i18nKey: 'autoMapping.error.csvFailed' })
     } finally {
