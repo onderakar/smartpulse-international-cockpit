@@ -1,22 +1,22 @@
 import { describe, it, expect } from 'vitest'
 import { parseAutoMappingCsv } from './autoMappingParser'
 
-const MINIMAL_CSV = `#,Variable,BatteryA,BatteryB
-1,Asset_ID,1943,1944
-2,PV_Asset_ID,3022,-
-3,Masternode,SP01010860,SP01010829
-4,Total_Grid_Capacity_Generation_MW,50,100
-5,Total_Grid_Capacity_Consumption_MW,50,100
-6,Porfolio_ID_DAM_GEN,PORTF_1,PORTF_2
-7,Max_Battery_Discharge_Power_MW,50,100
-8,Max_Battery_Charge_Power_MW,50,100
-9,Battery_Capacity_MWh,100,200
-10,Charge_Efficiency_Percentage,95,95
-11,Discharge_Efficiency_Percentage,95,95
-12,Min_SOC_Percentage,10,10
-13,Max_SOC_Percentage,90,90
-14,PV_Capacity_MW_ac,30,-
-15,PV_Capacity_MWp,35,-`
+const MINIMAL_CSV = `Variable,BatteryA,BatteryB
+Asset_ID,1943,1944
+PV_Asset_ID,3022,-
+Masternode,SP01010860,SP01010829
+Total_Grid_Capacity_Generation_MW,50,100
+Total_Grid_Capacity_Consumption_MW,50,100
+Porfolio_ID_DAM_GEN,PORTF_1,PORTF_2
+Max_Battery_Discharge_Power_MW,50,100
+Max_Battery_Charge_Power_MW,50,100
+Battery_Capacity_MWh,100,200
+Charge_Efficiency_Percentage,95,95
+Discharge_Efficiency_Percentage,95,95
+Min_SOC_Percentage,10,10
+Max_SOC_Percentage,90,90
+PV_Capacity_MW_ac,30,-
+PV_Capacity_MWp,35,-`
 
 describe('parseAutoMappingCsv', () => {
   it('returns one BatteryColumn per battery column', () => {
@@ -72,19 +72,19 @@ describe('parseAutoMappingCsv', () => {
   })
 
   it('is case-insensitive on row keys', () => {
-    const csv = `#,Variable,BatteryA\n1,asset_id,1943`
+    const csv = `Variable,BatteryA\nasset_id,1943`
     const result = parseAutoMappingCsv(csv)
     expect(result.batteries[0].assetId).toBe(1943)
   })
 
   it('trims whitespace in values', () => {
-    const csv = `#,Variable,BatteryA\n1,Asset_ID, 1943 `
+    const csv = `Variable,BatteryA\nAsset_ID, 1943 `
     const result = parseAutoMappingCsv(csv)
     expect(result.batteries[0].assetId).toBe(1943)
   })
 
   it('returns null for empty Asset_ID and emits missing_asset_id warning', () => {
-    const csv = `#,Variable,BatteryA\n1,Asset_ID,`
+    const csv = `Variable,BatteryA\nAsset_ID,`
     const result = parseAutoMappingCsv(csv)
     expect(result.batteries[0].assetId).toBeNull()
     expect(result.warnings.some(w => w.type === 'missing_asset_id')).toBe(true)
