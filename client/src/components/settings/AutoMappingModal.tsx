@@ -32,6 +32,69 @@ export function AutoMappingModal({ state, onClose }: Props) {
     }
   }, [state.logLines])
 
+  // ── Confirm Stage 1 ───────────────────────────────────────────────────────
+  if (state.modalStage === 'confirm1') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+        <div className="w-[420px] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
+          <div className="bg-slate-800 px-4 py-3">
+            <span className="font-semibold text-sm text-slate-100">{t('autoMapping.modalTitle')}</span>
+          </div>
+          <div className="p-5 space-y-4">
+            <p className="text-sm text-slate-300">{t('autoMapping.confirmBody')}</p>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                onClick={onClose}
+                className="px-4 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold"
+              >
+                {t('autoMapping.cancel')}
+              </button>
+              <button
+                onClick={state.confirmPhase1}
+                className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold"
+              >
+                {t('autoMapping.confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Confirm Stage 2 ───────────────────────────────────────────────────────
+  if (state.modalStage === 'confirm2') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+        <div className="w-[440px] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
+          <div className="bg-slate-800 px-4 py-3">
+            <span className="font-semibold text-sm text-slate-100">
+              {t('autoMapping.confirmPhase2Title')}
+            </span>
+          </div>
+          <div className="p-5 space-y-4">
+            <p className="text-sm text-slate-300">{t('autoMapping.confirmPhase2Body')}</p>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                onClick={() => state.confirmPhase2(false)}
+                className="px-4 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold"
+              >
+                {t('autoMapping.confirmPhase2No')}
+              </button>
+              <button
+                onClick={() => state.confirmPhase2(true)}
+                className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold"
+              >
+                {t('autoMapping.confirmPhase2Yes')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Running / Complete ────────────────────────────────────────────────────
   const doneSteps = state.steps.filter(s => s.status === 'done').length
   const progress = Math.round((doneSteps / state.steps.length) * 100)
 
@@ -46,7 +109,7 @@ export function AutoMappingModal({ state, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="w-[520px] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
+      <div className="w-[540px] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
 
         {/* Header */}
         <div className="bg-slate-800 px-4 py-3 flex items-center justify-between">
@@ -93,14 +156,17 @@ export function AutoMappingModal({ state, onClose }: Props) {
           {state.isComplete && state.report && (
             <div className="grid grid-cols-4 gap-2">
               {[
-                { label: 'GCP', value: state.report.gcpsCreated, cls: 'text-green-400' },
-                { label: 'BESS', value: state.report.bessCreated, cls: 'text-green-400' },
-                { label: 'SOLAR', value: state.report.solarCreated, cls: 'text-green-400' },
-                { label: t('autoMapping.warnings'), value: state.report.warnings.length, cls: state.report.warnings.length > 0 ? 'text-yellow-400' : 'text-green-400' },
+                { label: 'GCPs',                                            value: state.report.gcpsCreated,            cls: 'text-green-400' },
+                { label: 'BESS',                                            value: state.report.phase1BessComponents,   cls: 'text-green-400' },
+                { label: t('autoMapping.report.genSubComponents'),          value: state.report.phase1GenSubComponents, cls: 'text-blue-400'  },
+                { label: t('autoMapping.report.conSubComponents'),          value: state.report.phase1ConSubComponents, cls: 'text-blue-400'  },
+                { label: t('autoMapping.report.phase2Gcps'),                value: state.report.phase2GcpsCreated,      cls: 'text-slate-400' },
+                { label: t('autoMapping.report.ambiguousNames'),            value: state.report.phase1AmbiguousNames,   cls: state.report.phase1AmbiguousNames > 0 ? 'text-yellow-400' : 'text-slate-500' },
+                { label: t('autoMapping.warnings').replace('{count}', ''), value: state.report.warnings.length,        cls: state.report.warnings.length > 0 ? 'text-yellow-400' : 'text-green-400' },
               ].map(card => (
                 <div key={card.label} className="bg-slate-800 border border-slate-600 rounded p-2 text-center">
                   <div className={`text-lg font-bold ${card.cls}`}>{card.value}</div>
-                  <div className="text-[9px] text-slate-400 mt-0.5">{card.label}</div>
+                  <div className="text-[9px] text-slate-400 mt-0.5 leading-tight">{card.label}</div>
                 </div>
               ))}
             </div>
@@ -115,8 +181,8 @@ export function AutoMappingModal({ state, onClose }: Props) {
               <div
                 key={i}
                 className={
-                  line.startsWith('[OK]') ? 'text-green-400' :
-                  line.startsWith('[WARN]') ? 'text-yellow-400' :
+                  line.startsWith('[OK]')    ? 'text-green-400' :
+                  line.startsWith('[WARN]')  ? 'text-yellow-400' :
                   line.startsWith('[ERROR]') ? 'text-red-400' :
                   'text-slate-500'
                 }
@@ -133,7 +199,13 @@ export function AutoMappingModal({ state, onClose }: Props) {
                 ⚠ {t('autoMapping.warnings').replace('{count}', String(state.warnings.length))}
               </div>
               {state.warnings.map((w, i) => (
-                <div key={i} className="text-yellow-200/80">• {t(w.message as TranslationKey).replace('{column}', w.column ?? '')}</div>
+                <div key={i} className="text-yellow-200/80">
+                  • {t(w.message as TranslationKey)
+                      .replace('{column}', w.column ?? '')
+                      .replace('{plantName}', w.plantName ?? '')
+                      .replace('{plantId}', String(w.plantId ?? ''))
+                      .replace('{direction}', '')}
+                </div>
               ))}
             </div>
           )}
