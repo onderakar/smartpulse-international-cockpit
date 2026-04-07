@@ -56,6 +56,7 @@ const T = {
   'common.loading': { tr: 'Yukleniyor...', en: 'Loading...' },
   'common.retry': { tr: 'Tekrar Dene', en: 'Retry' },
   'common.remove': { tr: 'Kaldir', en: 'Remove' },
+  'common.cancel': { tr: 'Vazgeç', en: 'Cancel' },
   'common.close': { tr: 'Kapat', en: 'Close' },
   'common.test': { tr: 'Test', en: 'Test' },
   'common.discard': { tr: 'Degisiklikleri Iptal Et', en: 'Discard Changes' },
@@ -253,6 +254,9 @@ const T = {
   'assetMapping.gcpId': { tr: 'GCP ID', en: 'GCP ID' },
   'assetMapping.gcpIdPlaceholder': { tr: 'GCP ID girin', en: 'Enter GCP ID' },
   'assetMapping.gcpNamePlaceholder': { tr: 'GCP adını girin', en: 'Enter GCP name' },
+  'assetMapping.clearAll': { tr: 'Tüm Mapping\'i Sil', en: 'Clear All Mappings' },
+  'assetMapping.clearAllConfirmTitle': { tr: 'Tüm Mapping Silinecek', en: 'Clear All Mappings' },
+  'assetMapping.clearAllConfirmBody': { tr: 'Tüm şirket, GCP ve bileşen tanımları silinecek. Bu işlem geri alınamaz. Devam etmek istiyor musunuz?', en: 'All companies, GCPs and components will be removed. This cannot be undone. Are you sure?' },
 
   // ==================== Monitoring Credentials ====================
   'monitoringCreds.title': { tr: 'Monitoring Kimlik Bilgileri', en: 'Monitoring Credentials' },

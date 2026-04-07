@@ -41,6 +41,9 @@ export function AssetMappingForm() {
   // Save status
   const [isSaved, setIsSaved] = useState(false);
 
+  // Clear all confirm dialog
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
   // Load from profile
   useEffect(() => {
     if (profile?.assetMapping) {
@@ -174,6 +177,13 @@ export function AssetMappingForm() {
     updateProfile({ assetMapping: newMapping });
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
+  };
+
+  // --- Clear all ---
+  const handleClearAll = () => {
+    setCompanies([]);
+    updateProfile({ assetMapping: { companies: [], ftpDirection, ftpFilename } });
+    setShowClearConfirm(false);
   };
 
   // Available companies not yet added
@@ -424,11 +434,35 @@ export function AssetMappingForm() {
             onClick={handleSave}
             className="bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium px-6 py-2 rounded-lg transition-colors"
           >{t('assetMapping.saveMapping')}</button>
+          <button
+            onClick={() => setShowClearConfirm(true)}
+            className="bg-red-700 hover:bg-red-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >{t('assetMapping.clearAll')}</button>
           {isSaved && (
             <span className="text-green-400 text-sm font-medium animate-pulse">{t('assetMapping.saved')}</span>
           )}
         </div>
       </div>
+
+      {/* Clear All Confirm Dialog */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-dark-800 border border-gray-600 rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-white mb-3">{t('assetMapping.clearAllConfirmTitle')}</h3>
+            <p className="text-gray-300 text-sm mb-6">{t('assetMapping.clearAllConfirmBody')}</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="px-4 py-2 text-sm text-gray-300 hover:text-white border border-gray-600 rounded-lg transition-colors"
+              >{t('common.cancel')}</button>
+              <button
+                onClick={handleClearAll}
+                className="px-4 py-2 text-sm font-medium bg-red-700 hover:bg-red-800 text-white rounded-lg transition-colors"
+              >{t('assetMapping.clearAll')}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
