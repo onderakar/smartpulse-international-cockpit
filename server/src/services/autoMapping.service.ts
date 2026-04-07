@@ -101,6 +101,8 @@ function buildComponent(
 ): GcpComponent {
   let generation: GcpSubComponent | undefined
   let consumption: GcpSubComponent | undefined
+  let directPortalPlantId: number | undefined
+  let directInstalledPowerMw: number | undefined
 
   for (const { plant, direction } of compGroup.plants) {
     const sub: GcpSubComponent = {
@@ -109,7 +111,16 @@ function buildComponent(
       portalPlantName: plant.plantName,
     }
 
-    if (direction === 'gen') {
+    if (direction === 'none') {
+      // Direct component-level mapping — no gen/con subcomponent wrapping
+      if (directPortalPlantId !== undefined) {
+        // Multiple direction-less plants in same component group → ambiguous
+        emitWarn('ambiguous_direction', 'autoMapping.warn.ambiguous_direction', { plantName: plant.plantName })
+      } else {
+        directPortalPlantId = plant.plantId
+        directInstalledPowerMw = plant.installedPowerMw > 0 ? plant.installedPowerMw : undefined
+      }
+    } else if (direction === 'gen') {
       if (generation) {
         emitWarn('duplicate_direction', 'autoMapping.warn.duplicate_direction', { plantName: plant.plantName, direction: 'gen' })
       } else {
@@ -122,18 +133,9 @@ function buildComponent(
         consumption = sub
       }
     } else {
-      // direction === null: either no keyword or ambiguous (both gen+con)
-      const nameL = plant.plantName.toLowerCase()
-      const hasGen = /\b(gen|generation)\b/.test(nameL)
-      const hasCon = /\b(con|consumption)\b/.test(nameL)
-      if (hasGen && hasCon) {
-        emitWarn('ambiguous_direction', 'autoMapping.warn.ambiguous_direction', { plantName: plant.plantName })
-        if (!generation) generation = sub
-      } else {
-        emitWarn('no_gen_or_con_keyword', 'autoMapping.warn.no_gen_or_con_keyword', { plantName: plant.plantName })
-        if (!generation) generation = sub
-        else if (!consumption) consumption = sub
-      }
+      // 'ambiguous': both gen+con keywords in the same plant name
+      emitWarn('ambiguous_direction', 'autoMapping.warn.ambiguous_direction', { plantName: plant.plantName })
+      if (!generation) generation = sub
     }
   }
 
@@ -143,8 +145,11 @@ function buildComponent(
     componentId: generateId(),
     type,
     displayName: compGroup.componentKey,
-    generation,
-    consumption,
+    // Direct mapping if no gen/con keywords; subcomponent mapping otherwise
+    ...(directPortalPlantId !== undefined
+      ? { portalPlantId: directPortalPlantId }
+      : { generation, consumption }
+    ),
     forecastPreference: { ...DEFAULT_FORECAST_PREFERENCE },
     monitoring: masternode ? { masternode, metrics: [] } : undefined,
   }
@@ -154,7 +159,8 @@ function buildComponent(
     if (Object.values(bp).some(v => v !== undefined)) {
       comp.bessParams = bp as BessParams
     }
-    comp.installedCapacityMw = bp.maxDischargePowerMw ?? undefined
+    // Prefer CSV max discharge power; fall back to portal InstalledPowerMW for direct-mapped components
+    comp.installedCapacityMw = bp.maxDischargePowerMw ?? directInstalledPowerMw ?? undefined
   }
 
   return comp
@@ -301,13 +307,23 @@ export async function runAutoMapping(
         phase1BessComponents++
         if (comp.generation) { phase1GenSubComponents++; gcpGenPlantId = comp.generation.portalPlantId }
         if (comp.consumption) { phase1ConSubComponents++; gcpConPlantId = comp.consumption.portalPlantId }
+        // Direct mapping: counts as one gen equivalent for tracking
+        if (comp.portalPlantId && !comp.generation && !comp.consumption) {
+          phase1GenSubComponents++
+          gcpGenPlantId = comp.portalPlantId
+        }
       } else {
         if (comp.generation) { phase1GenSubComponents++; if (!gcpGenPlantId) gcpGenPlantId = comp.generation.portalPlantId }
         if (comp.consumption) { phase1ConSubComponents++; if (!gcpConPlantId) gcpConPlantId = comp.consumption.portalPlantId }
+        if (comp.portalPlantId && !comp.generation && !comp.consumption) {
+          phase1GenSubComponents++
+          if (!gcpGenPlantId) gcpGenPlantId = comp.portalPlantId
+        }
       }
 
       if (comp.generation) phase1UsedPlantIds.add(comp.generation.portalPlantId)
       if (comp.consumption) phase1UsedPlantIds.add(comp.consumption.portalPlantId)
+      if (comp.portalPlantId) phase1UsedPlantIds.add(comp.portalPlantId)
     }
 
     let gcpName = sanitizeName(gcpGroup.gcpDisplayName)
@@ -373,9 +389,14 @@ export async function runAutoMapping(
         components.push(comp)
         if (comp.generation) genCount++
         if (comp.consumption) conCount++
+        if (comp.portalPlantId && !comp.generation && !comp.consumption) genCount++ // direct = counts as gen
       }
 
-      const isStandalone = components.length === 1 && components[0].generation && !components[0].consumption
+      // Handles both direct (portalPlantId only) and subcomponent (generation only, no consumption) cases
+      const isStandalone = components.length === 1 && (
+        (components[0].portalPlantId && !components[0].generation && !components[0].consumption) ||
+        (components[0].generation && !components[0].consumption && !components[0].portalPlantId)
+      )
       if (isStandalone) phase2Standalone++
       else phase2Grouped++
 
