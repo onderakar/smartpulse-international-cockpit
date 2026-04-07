@@ -150,21 +150,32 @@ export function getBessGcps(mapping: AssetMapping | null | undefined): BessGcpIn
   return result;
 }
 
-function migrateComponent(comp: any): GcpComponent {
+/**
+ * Migrates a single component from the legacy format (single `portalPlantId`) to the
+ * new Gen/Con sub-component format. If `generation` already exists, returns unchanged.
+ * Used inside migrateAssetMapping for all three migration paths.
+ */
+function migrateComponent(comp: Record<string, unknown>): GcpComponent {
   // If component has old single portalPlantId but no generation sub-component, migrate it
   if (comp.portalPlantId && !comp.generation) {
     return {
       ...comp,
       generation: {
-        portalPlantId: comp.portalPlantId,
-        installedPowerMw: comp.installedCapacityMw,
+        portalPlantId: comp.portalPlantId as number,
+        installedPowerMw: comp.installedCapacityMw as number | undefined,
       },
     } as GcpComponent;
   }
-  return comp as GcpComponent;
+  return comp as unknown as GcpComponent;
 }
 
-/** Migrate old AssetMapping formats to current format. */
+/**
+ * Migrate old AssetMapping formats to current format.
+ * Handles three migration paths:
+ *  1. Current format (companies.gridConnectionPoints) — applies migrateComponent per component
+ *  2. Old format (companies.uevcbs) — converts uevcbs to gridConnectionPoints
+ *  3. Legacy single-uevcb format — wraps in company/GCP structure
+ */
 export function migrateAssetMapping(raw: any): AssetMapping {
   // Already in current format
   if (raw?.companies && Array.isArray(raw.companies)) {
