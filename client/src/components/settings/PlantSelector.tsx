@@ -43,7 +43,7 @@ export function PlantSelector({
         }}
         className="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
       >
-        <option value="">{onClear ? '— None —' : t('assetMapping.selectPlant')}</option>
+        <option value="" disabled={!onClear}>{onClear ? '— None —' : t('assetMapping.selectPlant')}</option>
         {filtered.map(p => (
           <option key={p.id} value={p.id}>
             {p.name} (ID: {p.id})
