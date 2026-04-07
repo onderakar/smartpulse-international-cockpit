@@ -130,10 +130,10 @@ export function AutoMappingModal({ state, onClose }: Props) {
           {state.isComplete && state.warnings.length > 0 && (
             <div className="bg-yellow-950/40 border border-yellow-800/50 rounded p-2.5 text-xs space-y-1">
               <div className="text-yellow-400 font-semibold">
-                ⚠ {t('autoMapping.warnings')}
+                ⚠ {t('autoMapping.warnings').replace('{count}', String(state.warnings.length))}
               </div>
               {state.warnings.map((w, i) => (
-                <div key={i} className="text-yellow-200/80">• {w.message}{w.column ? ` (${w.column})` : ''}</div>
+                <div key={i} className="text-yellow-200/80">• {t(w.message as TranslationKey).replace('{column}', w.column ?? '')}</div>
               ))}
             </div>
           )}

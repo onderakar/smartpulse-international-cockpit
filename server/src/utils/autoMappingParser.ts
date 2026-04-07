@@ -50,17 +50,17 @@ export function parseAutoMappingCsv(csvContent: string): CsvParseResult {
     return { batteries: [], warnings }
   }
 
-  // Parse header row — columns 0 and 1 are metadata (#, Variable); battery names start at index 2
+  // Parse header row — column 0 is "Variable" label; battery names start at index 1
   const headers = lines[0].split(',')
-  const batteryNames = headers.slice(2)
+  const batteryNames = headers.slice(1)
 
   // Build row map: normalizedKey → values[]  (one value per battery column)
   const rowMap = new Map<string, string[]>()
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(',')
-    const key = normalizeKey(cols[1] ?? '')
+    const key = normalizeKey(cols[0] ?? '')
     if (key) {
-      rowMap.set(key, cols.slice(2))
+      rowMap.set(key, cols.slice(1))
     }
   }
 

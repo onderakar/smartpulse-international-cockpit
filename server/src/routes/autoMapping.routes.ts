@@ -20,7 +20,7 @@ export function createAutoMappingRoutes(
       id: String(session.groupId),
       name: '',
       portalEnv: 'prod',
-      assetMapping: { companies: [], ftpDirection: 'incoming', ftpFilename: '' },
+      assetMapping: { companies: [], ftpDirection: 'incoming', ftpFilename: 'Technical_Parameters.csv' },
       polling: DEFAULT_POLLING_CONFIG,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
