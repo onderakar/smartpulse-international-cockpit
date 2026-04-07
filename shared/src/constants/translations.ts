@@ -428,6 +428,7 @@ const T = {
   'autoMapping.button':                { tr: 'Otomatik Eşleştir', en: 'Auto Mapping' },
   'autoMapping.confirmTitle':          { tr: 'Mevcut Mapping Silinecek', en: 'Existing Mapping Will Be Replaced' },
   'autoMapping.confirmBody':           { tr: '{gcpCount} GCP ve {componentCount} bileşen tanımlı. Otomatik eşleştirme çalıştırılırsa mevcut yapılandırma silinecek.', en: '{gcpCount} GCPs and {componentCount} components are defined. Running Auto Mapping will replace the existing configuration.' },
+  'autoMapping.confirm':               { tr: 'Evet, Devam Et', en: 'Yes, Proceed' },
   'autoMapping.confirmProceed':        { tr: 'Evet, Devam Et', en: 'Yes, Proceed' },
   'autoMapping.confirmPhase2Title':    { tr: 'BESS Dışı Tesisler de Eşleştirilsin mi?', en: 'Also Map Non-Battery Plants?' },
   'autoMapping.confirmPhase2Body':     { tr: 'Opsiyonel: Kalan portal tesisleri taranır ve BESS dışı varlıklar için de GCP oluşturulur. Bu işlem daha uzun sürebilir.', en: 'Optional: scan all remaining portal plants and create GCPs for non-battery assets. This may take longer.' },
