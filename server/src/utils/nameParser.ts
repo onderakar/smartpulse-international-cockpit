@@ -165,12 +165,12 @@ export function groupPlantsByGcp(plants: PortalPlantEntry[]): Map<string, PlantG
     }
     // Fallback: use direct-mapped ('none') plant name
     if (!found) {
-      outer2: for (const compGroup of gcpGroup.components.values()) {
+      outerFallback: for (const compGroup of gcpGroup.components.values()) {
         for (const entry of compGroup.plants) {
           if (entry.direction === 'none') {
             const locationName = stripTypeKeywords(entry.plant.plantName).trim()
             if (locationName) { gcpGroup.gcpDisplayName = locationName }
-            break outer2
+            break outerFallback
           }
         }
       }
