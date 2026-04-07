@@ -57,3 +57,13 @@ export interface ForecastSubmissionResponse {
   message?: string;
   data?: any;        // raw portal API response for diagnostics
 }
+
+// ==================== Forecast Visualization (Client-side) ====================
+
+import { MetricDataPoint } from './monitoring.types';
+
+export interface ForecastSeriesItem {
+  label: string;
+  data: MetricDataPoint[];
+  color: string;
+}
