@@ -83,8 +83,8 @@ export interface GridConnectionPoint {
   id: number;
   name: string;
   timezone: string;
-  /** Default: 15 (quarter-hourly) */
-  resolutionMinutes: MTUResolution;
+  /** GCP'ye özgü zaman çözünürlüğü override. Tanımlı değilse GroupProfile.defaultResolutionMinutes kullanılır. */
+  resolutionMinutes?: MTUResolution;
   components: GcpComponent[];
 
   // Auto-mapping attributes

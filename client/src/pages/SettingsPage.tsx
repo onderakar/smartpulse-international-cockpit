@@ -120,6 +120,28 @@ export function SettingsPage() {
           </div>
         </div>
 
+        {/* Default Resolution */}
+        <div className="bg-[#1c1c28] border border-[#2a2a3e] rounded-lg p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-medium text-white flex items-center gap-2">
+                <i className="ri-time-line text-primary-400" />
+                {t('settings.defaultResolution')}
+              </h3>
+              <p className="text-xs text-[#a0a0b0] mt-1">{t('settings.defaultResolutionDesc')}</p>
+            </div>
+            <select
+              value={profile?.defaultResolutionMinutes ?? 15}
+              onChange={e => updateProfile({ defaultResolutionMinutes: Number(e.target.value) as 15 | 30 | 60 })}
+              className="bg-[#12121c] border border-[#2a2a3e] text-white text-sm rounded px-3 py-1.5"
+            >
+              <option value={15}>{t('settings.resolution15')}</option>
+              <option value={30}>{t('settings.resolution30')}</option>
+              <option value={60}>{t('settings.resolution60')}</option>
+            </select>
+          </div>
+        </div>
+
         {/* Export / Import */}
         <div className="bg-gray-800 rounded-xl p-5">
           <div className="flex gap-3">

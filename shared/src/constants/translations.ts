@@ -88,6 +88,12 @@ const T = {
   // ==================== Schedule BAP Settings ====================
   'settings.scheduleBapEditable': { tr: 'Schedule BAP Düzenleme', en: 'Schedule BAP Editing' },
   'settings.scheduleBapEditableDesc': { tr: 'Kapalıyken Schedule BAP sütunu salt okunur olur, sadece FTP\'den güncellenir.', en: 'When off, Schedule BAP column is read-only and only updated from FTP.' },
+  'settings.defaultResolution': { tr: 'Varsayılan Zaman Çözünürlüğü', en: 'Default Time Resolution' },
+  'settings.defaultResolutionDesc': { tr: 'GCP\'ye özgü override tanımlı değilse tüm sistem bu çözünürlüğü kullanır.', en: 'All GCPs use this resolution unless overridden at the GCP level.' },
+  'settings.resolution15': { tr: '15 dk (Çeyrek saatlik)', en: '15 min (Quarter-hourly)' },
+  'settings.resolution30': { tr: '30 dk (Yarım saatlik)', en: '30 min (Half-hourly)' },
+  'settings.resolution60': { tr: '60 dk (Saatlik)', en: '60 min (Hourly)' },
+  'assetMapping.searchPlaceholder': { tr: 'Ara: şirket, GCP veya bileşen adı', en: 'Search: company, GCP or component name' },
 
   // ==================== Table mode ====================
   'table.time': { tr: 'Saat', en: 'Time' },
@@ -248,6 +254,7 @@ const T = {
   'assetMapping.metricOther': { tr: 'Diger (Ozel)', en: 'Other (Custom)' },
   'assetMapping.metricBapFromSoc': { tr: 'SoC verisinden BAP cikar', en: 'Extract BAP from SoC payload' },
   'assetMapping.selectPlant': { tr: 'Santral secin...', en: 'Select a plant...' },
+  'assetMapping.resolutionDefault': { tr: 'Sistem varsayılanı (15 dk)', en: 'System default (15 min)' },
   'assetMapping.min15': { tr: '15 dk', en: '15 min' },
   'assetMapping.min30': { tr: '30 dk', en: '30 min' },
   'assetMapping.min60': { tr: '60 dk', en: '60 min' },

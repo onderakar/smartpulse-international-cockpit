@@ -333,7 +333,6 @@ export async function runAutoMapping(
       id: idBase + index,
       name: gcpName,
       timezone,
-      resolutionMinutes: 15,
       components,
       maxInjectionMw: battery.maxInjectionMw ?? undefined,
       maxConsumptionMw: battery.maxConsumptionMw ?? undefined,
@@ -407,7 +406,6 @@ export async function runAutoMapping(
         id: idBase + phase1Gcps.length + phase2Gcps.length,
         name: gcpName,
         timezone,
-        resolutionMinutes: 15,
         components,
       }
 

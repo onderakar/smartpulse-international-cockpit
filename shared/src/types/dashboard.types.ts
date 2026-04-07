@@ -1,4 +1,5 @@
 import { AssetMapping } from './assetMapping.types';
+import { MTUResolution } from './plant.types';
 
 export interface PollingConfig {
   intervalSeconds: number;
@@ -33,6 +34,8 @@ export interface GroupProfile {
   };
   graphQlApiKey?: string;
   scheduleBapEditable?: boolean;
+  /** Sistem geneli varsayılan zaman çözünürlüğü. GCP override yoksa bu değer kullanılır. Default: 15 */
+  defaultResolutionMinutes?: MTUResolution;
   createdAt: string;
   updatedAt: string;
 }
@@ -59,6 +62,7 @@ export interface DashboardProfile {
   };
   graphQlApiKey?: string;
   scheduleBapEditable?: boolean;
+  defaultResolutionMinutes?: MTUResolution;
   widgetLayout?: WidgetLayoutItem[];
   groupId?: string;
   createdAt: string;

@@ -13,3 +13,4 @@ export * from './constants/defaults'
 
 // Utils
 export { sumForecastSeries } from './utils/forecastAggregation';
+export { getEffectiveResolution } from './utils/resolutionUtils';

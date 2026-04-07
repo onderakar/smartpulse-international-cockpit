@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useProfile } from '../../context/ProfileContext';
 import { useAuth } from '../../context/AuthContext';
 import { useLocale } from '../../context/LocaleContext';
@@ -44,6 +44,21 @@ export function AssetMappingForm() {
 
   // Clear all confirm dialog
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  // Search
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredCompanies = useMemo(() => {
+    if (!searchQuery.trim()) return companies;
+    const q = searchQuery.toLowerCase();
+    return companies.filter(company => {
+      if (company.companyName.toLowerCase().includes(q)) return true;
+      return company.gridConnectionPoints.some(gcp => {
+        if (gcp.name.toLowerCase().includes(q)) return true;
+        return gcp.components.some(comp => comp.displayName.toLowerCase().includes(q));
+      });
+    });
+  }, [companies, searchQuery]);
 
   // Load from profile
   useEffect(() => {
@@ -99,7 +114,6 @@ export function AssetMappingForm() {
       id: gcpId,
       name: form.name,
       timezone: company.timezone,
-      resolutionMinutes: 15,
       components: [],
     };
     const updated = [...companies];
@@ -229,8 +243,21 @@ export function AssetMappingForm() {
           <p className="text-sm text-gray-500 italic">{t('assetMapping.noCompanies')}</p>
         )}
 
+        {/* Search */}
+        {companies.length > 0 && (
+          <div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder={t('assetMapping.searchPlaceholder')}
+              className="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-gray-500"
+            />
+          </div>
+        )}
+
         {/* Company panels */}
-        {companies.map((company, cIdx) => {
+        {filteredCompanies.map((company, cIdx) => {
           const isExpanded = expandedCompanies.has(company.companyId);
           const portalCompany = portalCompanies.find(pc => pc.id === company.companyId);
           const companyPlantIds = portalCompany?.powerPlantIds || [];
@@ -331,10 +358,11 @@ export function AssetMappingForm() {
                               <div>
                                 <label className="block text-xs text-gray-400 mb-1">{t('assetMapping.resolution')}</label>
                                 <select
-                                  value={gcp.resolutionMinutes}
-                                  onChange={(e) => updateGcp(cIdx, gIdx, { resolutionMinutes: parseInt(e.target.value) as MTUResolution })}
+                                  value={gcp.resolutionMinutes ?? ''}
+                                  onChange={(e) => updateGcp(cIdx, gIdx, { resolutionMinutes: e.target.value === '' ? undefined : parseInt(e.target.value) as MTUResolution })}
                                   className="w-full bg-dark-700 border border-gray-600 rounded px-2 py-1.5 text-xs text-white"
                                 >
+                                  <option value="">{t('assetMapping.resolutionDefault')}</option>
                                   <option value={15}>{t('assetMapping.min15')}</option>
                                   <option value={30}>{t('assetMapping.min30')}</option>
                                   <option value={60}>{t('assetMapping.min60')}</option>
