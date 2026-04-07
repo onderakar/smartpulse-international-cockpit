@@ -257,6 +257,10 @@ const T = {
   'assetMapping.clearAll': { tr: 'Tüm Mapping\'i Sil', en: 'Clear All Mappings' },
   'assetMapping.clearAllConfirmTitle': { tr: 'Tüm Mapping Silinecek', en: 'Clear All Mappings' },
   'assetMapping.clearAllConfirmBody': { tr: 'Tüm şirket, GCP ve bileşen tanımları silinecek. Bu işlem geri alınamaz. Devam etmek istiyor musunuz?', en: 'All companies, GCPs and components will be removed. This cannot be undone. Are you sure?' },
+  'assetMapping.directPlant':      { tr: 'Doğrudan Portal Santrali', en: 'Direct Portal Plant' },
+  'assetMapping.generationPlant':  { tr: 'Üretim (Gen) Santrali', en: 'Generation Plant' },
+  'assetMapping.consumptionPlant': { tr: 'Tüketim (Con) Santrali', en: 'Consumption Plant' },
+  'assetMapping.plantMappingNote': { tr: 'Doğrudan VEYA Gen/Con kullanın — ikisini birden değil', en: 'Use Direct OR Gen/Con — not both at once' },
 
   // ==================== Monitoring Credentials ====================
   'monitoringCreds.title': { tr: 'Monitoring Kimlik Bilgileri', en: 'Monitoring Credentials' },

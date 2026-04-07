@@ -509,8 +509,16 @@ function ComponentEditor({ comp, companyPlantIds, excludePlantIds, onChange, onR
           <span className="text-gray-400 text-xs w-4">{expanded ? '\u25BC' : '\u25B6'}</span>
           <span className="text-xs font-medium text-white">{comp.displayName}</span>
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-dark-700 border border-gray-600 text-gray-400">{comp.type}</span>
-          {comp.portalPlantId ? (
-            <span className="text-xs text-gray-500">Plant: {comp.portalPlantId}</span>
+          {(comp.portalPlantId || comp.generation?.portalPlantId || comp.consumption?.portalPlantId) ? (
+            <span className="text-xs text-gray-500">
+              {comp.portalPlantId
+                ? `Plant: ${comp.portalPlantId}`
+                : [
+                    comp.generation  && `Gen: ${comp.generation.portalPlantId}`,
+                    comp.consumption && `Con: ${comp.consumption.portalPlantId}`,
+                  ].filter(Boolean).join(' / ')
+              }
+            </span>
           ) : null}
         </div>
         <button
@@ -551,24 +559,51 @@ function ComponentEditor({ comp, companyPlantIds, excludePlantIds, onChange, onR
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-3">
-        <div>
-          <PlantSelector
-            selectedPlantId={comp.portalPlantId || null}
-            filterPlantIds={companyPlantIds.length > 0 ? companyPlantIds : undefined}
-            excludePlantIds={excludePlantIds}
-            onSelect={(p) => onChange({ portalPlantId: p.id })}
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">{t('assetMapping.forecastSource')}</label>
-          <input
-            value={comp.forecastPreference.sourceName}
-            onChange={(e) => handleForecastChange('sourceName', e.target.value)}
-            placeholder="e.g. OptBESS, EpiasForecast"
-            className="w-full bg-dark-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
-          />
-        </div>
+      {/* Portal Plant Mapping */}
+      <div className="border border-gray-700 rounded-lg p-3 mb-3 space-y-2">
+        <p className="text-[10px] text-gray-500 italic">{t('assetMapping.plantMappingNote')}</p>
+
+        <PlantSelector
+          label={t('assetMapping.directPlant')}
+          selectedPlantId={comp.portalPlantId ?? null}
+          filterPlantIds={companyPlantIds.length > 0 ? companyPlantIds : undefined}
+          excludePlantIds={excludePlantIds}
+          onSelect={(p) => onChange({ portalPlantId: p.id })}
+          onClear={() => onChange({ portalPlantId: undefined })}
+        />
+
+        <PlantSelector
+          label={t('assetMapping.generationPlant')}
+          selectedPlantId={comp.generation?.portalPlantId ?? null}
+          filterPlantIds={companyPlantIds.length > 0 ? companyPlantIds : undefined}
+          excludePlantIds={excludePlantIds}
+          onSelect={(p) => onChange({
+            generation: { ...(comp.generation ?? {}), portalPlantId: p.id },
+          })}
+          onClear={() => onChange({ generation: undefined })}
+        />
+
+        <PlantSelector
+          label={t('assetMapping.consumptionPlant')}
+          selectedPlantId={comp.consumption?.portalPlantId ?? null}
+          filterPlantIds={companyPlantIds.length > 0 ? companyPlantIds : undefined}
+          excludePlantIds={excludePlantIds}
+          onSelect={(p) => onChange({
+            consumption: { ...(comp.consumption ?? {}), portalPlantId: p.id },
+          })}
+          onClear={() => onChange({ consumption: undefined })}
+        />
+      </div>
+
+      {/* Forecast Source */}
+      <div className="mb-3">
+        <label className="block text-xs text-gray-400 mb-1">{t('assetMapping.forecastSource')}</label>
+        <input
+          value={comp.forecastPreference.sourceName}
+          onChange={(e) => handleForecastChange('sourceName', e.target.value)}
+          placeholder="e.g. OptBESS, EpiasForecast"
+          className="w-full bg-dark-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
+        />
       </div>
 
       {/* Schedule ID — shown for all component types */}

@@ -8,9 +8,12 @@ interface PlantSelectorProps {
   filterPlantIds?: number[];
   excludePlantIds?: number[];
   label?: string;
+  onClear?: () => void;   // new: deselect/clear the current plant
 }
 
-export function PlantSelector({ selectedPlantId, onSelect, filterPlantIds, excludePlantIds, label }: PlantSelectorProps) {
+export function PlantSelector({
+  selectedPlantId, onSelect, filterPlantIds, excludePlantIds, label, onClear,
+}: PlantSelectorProps) {
   const { plants } = useAuth();
   const { t } = useLocale();
 
@@ -30,13 +33,17 @@ export function PlantSelector({ selectedPlantId, onSelect, filterPlantIds, exclu
       <select
         value={selectedPlantId ?? ''}
         onChange={(e) => {
+          if (e.target.value === '') {
+            onClear?.();
+            return;
+          }
           const id = parseInt(e.target.value, 10);
           const plant = filtered.find(p => p.id === id);
           if (plant) onSelect(plant);
         }}
         className="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
       >
-        <option value="" disabled>{t('assetMapping.selectPlant')}</option>
+        <option value="">{onClear ? '— None —' : t('assetMapping.selectPlant')}</option>
         {filtered.map(p => (
           <option key={p.id} value={p.id}>
             {p.name} (ID: {p.id})
