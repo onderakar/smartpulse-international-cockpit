@@ -45,8 +45,12 @@ export interface GcpComponent {
   /** Consumption-side portal plant */
   consumption?: GcpSubComponent;
   /**
-   * @deprecated Use generation.portalPlantId. Kept for migration compatibility.
-   * Old format components that only have portalPlantId are migrated on load.
+   * Direct component-level portal plant mapping.
+   * Use this when the component maps to exactly one SmartPulse plant
+   * and no gen/con direction split is needed.
+   *
+   * When a gen/con split is needed, use `generation` and/or `consumption` instead.
+   * Both patterns are valid — choose based on how the portal plant data is structured.
    */
   portalPlantId?: number;
 
@@ -151,21 +155,12 @@ export function getBessGcps(mapping: AssetMapping | null | undefined): BessGcpIn
 }
 
 /**
- * Migrates a single component from the legacy format (single `portalPlantId`) to the
- * new Gen/Con sub-component format. If `generation` already exists, returns unchanged.
- * Used inside migrateAssetMapping for all three migration paths.
+ * Components are returned as-is.
+ * portalPlantId is a valid direct-mapping field (not a legacy format).
+ * generation/consumption are valid subcomponent mapping fields.
+ * Both patterns coexist; no automatic conversion needed.
  */
 function migrateComponent(comp: Record<string, unknown>): GcpComponent {
-  // If component has old single portalPlantId but no generation sub-component, migrate it
-  if (comp.portalPlantId && !comp.generation) {
-    return {
-      ...comp,
-      generation: {
-        portalPlantId: comp.portalPlantId as number,
-        installedPowerMw: comp.installedCapacityMw as number | undefined,
-      },
-    } as GcpComponent;
-  }
   return comp as unknown as GcpComponent;
 }
 
@@ -271,7 +266,6 @@ export interface AutoMappingWarning {
     | 'parse_error'
     | 'ambiguous_direction'
     | 'missing_portal_plant'
-    | 'no_gen_or_con_keyword'
     | 'duplicate_direction';
   message: string;
   column?: string;
