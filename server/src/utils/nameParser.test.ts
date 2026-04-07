@@ -36,8 +36,15 @@ describe('extractComponentType', () => {
     ['Bagrentsi Hydro', 'HYDRO'],
     ['Bagrentsi Thermal', 'THERMAL'],
     ['Bagrentsi Asset', null],
+    ['Nikolichevtsi WPP', 'WIND'],
+    ['WPP Unit 1', 'WIND'],
   ])('"%s" → %s', (name, expected) => {
     expect(extractComponentType(name)).toBe(expected)
+  })
+
+  it('does not match WPP as substring (word boundary)', () => {
+    expect(extractComponentType('SWPP Unit')).toBeNull()
+    expect(extractComponentType('WPPx')).toBeNull()
   })
 })
 

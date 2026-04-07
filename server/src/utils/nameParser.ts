@@ -10,6 +10,7 @@ const TYPE_PATTERNS: Array<{ pattern: RegExp; type: ComponentType }> = [
   { pattern: /\bBESS\w*/gi,   type: 'BESS'    },
   { pattern: /\bPV\b/gi,      type: 'SOLAR'   },
   { pattern: /\bsolar\b/gi,   type: 'SOLAR'   },
+  { pattern: /\bWPP\b/gi,     type: 'WIND'    },
   { pattern: /\bwind\b/gi,    type: 'WIND'    },
   { pattern: /\bhydro\b/gi,   type: 'HYDRO'   },
   { pattern: /\bthermal\b/gi, type: 'THERMAL' },
