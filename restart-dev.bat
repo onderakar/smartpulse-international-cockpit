@@ -17,4 +17,8 @@ timeout /t 2 /nobreak >nul
 
 echo [3/3] Starting dev server (client + server concurrently)...
 echo.
+
+echo [4/4] Opening Chrome after a short delay...
+start "" cmd /c "timeout /t 4 /nobreak >nul && start chrome http://localhost:5173"
+
 npm run dev
