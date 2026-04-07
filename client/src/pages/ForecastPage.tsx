@@ -9,6 +9,7 @@ import { forecastApi } from '../api/forecast.api';
 import { monitoringApi } from '../api/monitoring.api';
 import type { ForecastSubmissionPrediction } from '@smartpulse-intl/shared';
 import { DateNav } from '../components/common/DateNav';
+import { ForecastPlantSelector, type ForecastSelection } from '../components/forecast/ForecastPlantSelector';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -219,12 +220,13 @@ export function ForecastPage() {
   const RESERVED_PROVIDERS = ['UserForecast', 'FinalForecast', 'EpiasForecast'];
 
   // Shared state
-  const [selectedPlantId, setSelectedPlantId] = useState<number | null>(null);
+  const [selectedSel, setSelectedSel] = useState<ForecastSelection | null>(null);
+  const selectedPlantId = selectedSel?.plantId ?? null;
   const [dateKey, setDateKey] = useState(() => new Date().toLocaleDateString('en-CA'));
   const [providers, setProviders] = useState<{ ProviderId: string; ProviderName: string }[]>([]);
 
   const selectedPlant = allPlants.find(b => b.plantId === selectedPlantId) ?? null;
-  const resolution = selectedPlant?.resolutionMinutes ?? 15;
+  const resolution = selectedSel?.resolutionMinutes ?? selectedPlant?.resolutionMinutes ?? 15;
 
   // Live clock
   const [nowStr, setNowStr] = useState(nowLocalIso);
@@ -234,12 +236,15 @@ export function ForecastPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedPlantId && gcpGroups.length > 0) {
+    if (!selectedSel && gcpGroups.length > 0) {
       // Auto-select first component of first group
       const first = gcpGroups[0];
-      setSelectedPlantId(first.children[0]?.plantId ?? null);
+      const firstChild = first.children[0];
+      if (firstChild) {
+        setSelectedSel({ plantId: firstChild.plantId, companyId: firstChild.companyId, resolutionMinutes: first.resolutionMinutes });
+      }
     }
-  }, [gcpGroups, selectedPlantId]);
+  }, [gcpGroups, selectedSel]);
 
   // Actual production data from monitoring API
   const [actualProduction, setActualProduction] = useState<{ timestamp: number; value: number }[]>([]);
@@ -999,9 +1004,9 @@ export function ForecastPage() {
 
   // ---- Render ----
   return (
-    <div className="p-6 max-w-[1400px] mx-auto">
+    <div className="p-4 max-w-[1600px] mx-auto flex flex-col h-full">
       {/* Header + date nav */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 shrink-0">
         <h2 className="text-xl font-bold text-white">{t('forecast.title')}</h2>
         <div className="flex items-center gap-3">
           <DateNav
@@ -1013,42 +1018,25 @@ export function ForecastPage() {
         </div>
       </div>
 
-      {/* Plant selector — grouped by GCP (child components only) */}
-      <div className="mb-5">
-        <span className="text-xs text-gray-500 block mb-2">{t('forecast.batteries')}</span>
-        <div className="flex flex-col gap-3">
-          {gcpGroups.map(group => (
-            <div key={group.gcpId}>
-              {/* GCP label */}
-              <div className="text-xs text-gray-500 mb-1">{group.gcpName}</div>
-              {/* Child components */}
-              {group.children.length > 0 && (
-                <div className="flex flex-wrap gap-0">
-                  {group.children.map((child, ci) => (
-                    <button
-                      key={child.plantId}
-                      onClick={() => setSelectedPlantId(child.plantId)}
-                      className={`text-left px-4 py-2 border transition-colors ${
-                        child.plantId === selectedPlantId
-                          ? 'bg-primary-600/20 border-primary-500 text-primary-300'
-                          : 'bg-dark-900/50 border-gray-700 text-gray-400 hover:border-gray-600'
-                      } ${ci === 0 ? 'rounded-tl-lg rounded-bl-lg' : ''} ${ci === group.children.length - 1 ? 'rounded-tr-lg rounded-br-lg' : ''}`}
-                    >
-                      <div className="text-xs font-medium">{child.displayName}</div>
-                      <div className="text-[10px] opacity-60">ID: {child.plantId}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+      {/* Two-column layout: sidebar + main */}
+      <div className="flex gap-4 min-h-0 flex-1">
+        {/* Sidebar — plant selector */}
+        <div className="w-64 shrink-0 bg-dark-800 border border-gray-700 rounded-lg p-3 overflow-y-auto">
+          <ForecastPlantSelector
+            mapping={mapping!}
+            selected={selectedSel}
+            onSelect={setSelectedSel}
+            defaultResolutionMinutes={profile?.defaultResolutionMinutes}
+          />
         </div>
-      </div>
+
+        {/* Main content */}
+        <div className="flex-1 flex flex-col gap-4 min-w-0 overflow-y-auto">
 
       {/* ============================================================= */}
       {/* SECTION 1: Forecast Viewer */}
       {/* ============================================================= */}
-      <div className="bg-dark-800 border border-gray-700 rounded-lg p-4 mb-6">
+      <div className="bg-dark-800 border border-gray-700 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-medium text-gray-300">{t('forecast.viewer')}</h3>
           <div className="flex items-center gap-2">
@@ -1311,6 +1299,9 @@ export function ForecastPage() {
           <span className="text-xs text-gray-600">{submitRows.length} {t('forecast.slots')}</span>
         </div>
       </div>
+
+        </div>{/* end main content */}
+      </div>{/* end two-column layout */}
     </div>
   );
 }

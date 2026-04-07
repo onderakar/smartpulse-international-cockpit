@@ -394,6 +394,9 @@ const T = {
   'forecast.noSeries': { tr: 'Goruntulemek icin provider secin', en: 'Select a provider to view' },
   'forecast.loadingSeries': { tr: 'Seri yukleniyor...', en: 'Loading series...' },
   'forecast.actualProduction': { tr: 'Gerceklesen Uretim', en: 'Actual Production' },
+  'forecast.selectorSearch': { tr: 'Ara: GCP, bileşen...', en: 'Search: GCP, component...' },
+  'forecast.gen': { tr: 'Üretim (Gen)', en: 'Generation (Gen)' },
+  'forecast.con': { tr: 'Tüketim (Con)', en: 'Consumption (Con)' },
 
   // ==================== Battery Program ====================
   'batteryProgram.title': { tr: 'Batarya Programi', en: 'Battery Program' },
