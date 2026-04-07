@@ -12,7 +12,7 @@ import { useProfile } from './ProfileContext';
 import { useMonitoring } from './MonitoringContext';
 import { useAuth } from './AuthContext';
 import { getAllGcps } from '@shared/types/assetMapping.types';
-import { MetricDataPoint, FORECAST_COLORS, ForecastSeriesItem, ForecastResponse } from '@smartpulse-intl/shared';
+import { MetricDataPoint, FORECAST_COLORS, ForecastSeriesItem, ForecastResponse, sumForecastSeries } from '@smartpulse-intl/shared';
 import { forecastApi } from '../api/forecast.api';
 
 /** Forecasts are refreshed from SmartPulse Portal every 15 minutes */
@@ -161,32 +161,59 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
     const fetchId = ++fetchIdRef.current;
     setLoading(true);
 
-    const requests: { label: string; promise: Promise<ForecastResponse> }[] = [];
+    // Component forecasts — one request per subcomponent plant ID, tagged with componentId for grouping
+    interface ForecastRequest {
+      componentId: string
+      label: string
+      promise: Promise<ForecastResponse>
+    }
+    const requests: ForecastRequest[] = []
 
-    // Component forecasts
     for (const comp of activeGcp.components) {
-      const plantId = comp.generation?.portalPlantId ?? comp.consumption?.portalPlantId ?? comp.portalPlantId ?? 0
-      if (comp.forecastPreference?.sourceName && plantId > 0) {
+      if (!comp.forecastPreference?.sourceName) continue
+
+      const apiParams = {
+        companyId,
+        provider: comp.forecastPreference.sourceName,
+        startDate: dayStr,
+        endDate: dayStr,
+        minute: 0,
+        hour: '12:30',
+        columnId: [6, 7, 10, 1, 2, 3, 4, 11, 12, 13, 14] as number[],
+      }
+
+      // Direct-mapped component (single plant, no gen/con subcomponents)
+      if (comp.portalPlantId && !comp.generation && !comp.consumption) {
         requests.push({
-          label: `${comp.displayName} Forecast`,
-          promise: forecastApi.getValues({
-            companyId,
-            powerPlantId: plantId,
-            provider: comp.forecastPreference.sourceName,
-            startDate: dayStr,
-            endDate: dayStr,
-            minute: 0,
-            hour: '12:30',
-            columnId: [6, 7, 10, 1, 2, 3, 4, 11, 12, 13, 14],
-          }),
-        });
+          componentId: comp.componentId,
+          label: comp.displayName,
+          promise: forecastApi.getValues({ ...apiParams, powerPlantId: comp.portalPlantId }),
+        })
+        continue
+      }
+
+      // Subcomponent-mapped: gen and/or con as separate requests
+      if (comp.generation?.portalPlantId) {
+        requests.push({
+          componentId: comp.componentId,
+          label: `${comp.displayName} (Gen)`,
+          promise: forecastApi.getValues({ ...apiParams, powerPlantId: comp.generation.portalPlantId }),
+        })
+      }
+      if (comp.consumption?.portalPlantId) {
+        requests.push({
+          componentId: comp.componentId,
+          label: `${comp.displayName} (Con)`,
+          promise: forecastApi.getValues({ ...apiParams, powerPlantId: comp.consumption.portalPlantId }),
+        })
       }
     }
 
     Promise.allSettled(requests.map(r => r.promise)).then(results => {
       if (fetchId !== fetchIdRef.current) return; // stale
 
-      const series: ForecastSeriesItem[] = [];
+      // Group parsed prediction points by componentId
+      const perComponent = new Map<string, MetricDataPoint[][]>()
       let foundIlkKgup: MetricDataPoint[] | undefined;
       let foundRkgup: MetricDataPoint[] | undefined;
       let foundOsos: MetricDataPoint[] | undefined;
@@ -196,7 +223,7 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
         const res = result.value;
         if (res.isError) return;
 
-        // Extract firstKgup / latestKgup from *any* successful response
+        // Extract firstKgup / latestKgup / osos from *any* successful response
         const times = res.Time || [];
         if (!foundIlkKgup && res.Questions?.firstKgup) {
           const pts = Array.isArray(res.Questions.firstKgup) && res.Questions.firstKgup.length > 0 && typeof res.Questions.firstKgup[0] !== 'object'
@@ -210,7 +237,6 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
             : parsePredictions(res.Questions.latestKgup, tzOffsetMs);
           if (pts.length > 0) foundRkgup = pts;
         }
-
         if (!foundOsos && res.Questions?.osos) {
           const pts = Array.isArray(res.Questions.osos) && res.Questions.osos.length > 0 && typeof res.Questions.osos[0] !== 'object'
             ? parseNumberArray(times, res.Questions.osos, tzOffsetMs)
@@ -223,30 +249,37 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
           ?? res.Questions?.lastPrediction
           ?? [];
         if (!predictions || predictions.length === 0) return;
+
         const points = parsePredictions(predictions, tzOffsetMs);
-        if (points.length > 0) {
-          series.push({
-            label: requests[idx].label,
-            data: points,
-            color: FORECAST_COLORS[idx % FORECAST_COLORS.length],
-          });
-        }
+        if (points.length === 0) return;
+
+        const { componentId } = requests[idx];
+        if (!perComponent.has(componentId)) perComponent.set(componentId, []);
+        perComponent.get(componentId)!.push(points);
       });
+
+      // Build one series per component by summing its subcomponent point arrays
+      const series: ForecastSeriesItem[] = [];
+      let colorIdx = 0;
+      for (const comp of activeGcp.components) {
+        const arrays = perComponent.get(comp.componentId);
+        if (!arrays || arrays.length === 0) continue;
+        const summed = sumForecastSeries(arrays);
+        if (summed.length > 0) {
+          series.push({
+            label: comp.displayName,
+            data: summed,
+            color: FORECAST_COLORS[colorIdx % FORECAST_COLORS.length],
+          });
+          colorIdx++;
+        }
+      }
 
       // Aggregate component forecasts into a GCP total series when more than one
       if (series.length > 1) {
-        const aggregateMap = new Map<number, number>();
-        for (const s of series) {
-          for (const pt of s.data) {
-            aggregateMap.set(pt.timestamp, (aggregateMap.get(pt.timestamp) ?? 0) + pt.value);
-          }
-        }
-        const aggregateData = [...aggregateMap.entries()]
-          .sort((a, b) => a[0] - b[0])
-          .map(([timestamp, value]) => ({ timestamp, value }));
         series.unshift({
           label: `${activeGcp.name} Total`,
-          data: aggregateData,
+          data: sumForecastSeries(series.map(s => s.data)),
           color: FORECAST_COLORS[series.length % FORECAST_COLORS.length],
         });
       }
