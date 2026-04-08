@@ -9,13 +9,17 @@ import {
   LabeledMetricMapping, BapSource, ComponentType,
   migrateAssetMapping,
 } from '@shared/types/assetMapping.types';
-import { MTUResolution } from '@shared/types/plant.types';
+import { ExtensionAttributes } from '@shared/types/attributes.types';
+import { getDefinitionsForScope, mergeDefinitions } from '@shared/constants/attributeDefinitions';
 import { configApi } from '../../api/config.api';
 
 export function AssetMappingForm() {
   const { profile, updateProfile } = useProfile();
   const { companies: portalCompanies, plants: portalPlants } = useAuth();
   const { t } = useLocale();
+
+  // Merged attribute definitions (system seed + custom from profile)
+  const allDefs = useMemo(() => mergeDefinitions(profile?.customAttributeDefinitions), [profile?.customAttributeDefinitions]);
 
   // Local edit state
   const [companies, setCompanies] = useState<CompanyMapping[]>([]);
@@ -276,6 +280,7 @@ export function AssetMappingForm() {
                   </span>
                   <span className="text-xs text-gray-500">ID: {company.companyId}</span>
                   <span className="text-xs text-gray-500">| {company.gridConnectionPoints.length} GCP</span>
+                  <span className="text-xs text-gray-500">| {company.timezone}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -346,29 +351,8 @@ export function AssetMappingForm() {
                         {isGcpExpanded && (
                           <div className="p-4 space-y-4">
                             {/* GCP metadata */}
-                            <div className="grid grid-cols-3 gap-4">
-                              <div>
-                                <label className="block text-xs text-gray-400 mb-1">{t('assetMapping.timezone')}</label>
-                                <input
-                                  value={gcp.timezone}
-                                  onChange={(e) => updateGcp(cIdx, gIdx, { timezone: e.target.value })}
-                                  className="w-full bg-dark-700 border border-gray-600 rounded px-2 py-1.5 text-xs text-white"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs text-gray-400 mb-1">{t('assetMapping.resolution')}</label>
-                                <select
-                                  value={gcp.resolutionMinutes ?? ''}
-                                  onChange={(e) => updateGcp(cIdx, gIdx, { resolutionMinutes: e.target.value === '' ? undefined : parseInt(e.target.value) as MTUResolution })}
-                                  className="w-full bg-dark-700 border border-gray-600 rounded px-2 py-1.5 text-xs text-white"
-                                >
-                                  <option value="">{t('assetMapping.resolutionDefault')}</option>
-                                  <option value={15}>{t('assetMapping.min15')}</option>
-                                  <option value={30}>{t('assetMapping.min30')}</option>
-                                  <option value={60}>{t('assetMapping.min60')}</option>
-                                </select>
-                              </div>
-                              <div>
+                            <div className="flex items-center gap-4">
+                              <div className="flex-1">
                                 <label className="block text-xs text-gray-400 mb-1">{t('assetMapping.gcpName')}</label>
                                 <input
                                   value={gcp.name}
@@ -377,6 +361,14 @@ export function AssetMappingForm() {
                                 />
                               </div>
                             </div>
+
+                            {/* GCP Technical Attributes */}
+                            <AttributeEditor
+                              attributes={gcp.attributes ?? {}}
+                              scope="GCP"
+                              allDefs={allDefs}
+                              onChange={(attrs) => updateGcp(cIdx, gIdx, { attributes: attrs })}
+                            />
 
                             {/* Components — collapsible */}
                             <div className="border-t border-gray-700 pt-3">
@@ -410,6 +402,7 @@ export function AssetMappingForm() {
                                         comp={comp}
                                         companyPlantIds={companyPlantIds}
                                         excludePlantIds={gcp.components.filter((_, i) => i !== compIdx).map(c => c.generation?.portalPlantId ?? c.consumption?.portalPlantId ?? c.portalPlantId).filter((id): id is number => !!id)}
+                                        allDefs={allDefs}
                                         onChange={(patch) => updateComponent(cIdx, gIdx, compIdx, patch)}
                                         onRemove={() => handleRemoveComponent(cIdx, gIdx, compIdx)}
                                       />
@@ -508,11 +501,12 @@ interface ComponentEditorProps {
   comp: GcpComponent;
   companyPlantIds: number[];
   excludePlantIds: number[];
+  allDefs: import('@shared/types/attributes.types').AttributeDefinition[];
   onChange: (patch: Partial<GcpComponent>) => void;
   onRemove: () => void;
 }
 
-function ComponentEditor({ comp, companyPlantIds, excludePlantIds, onChange, onRemove }: ComponentEditorProps) {
+function ComponentEditor({ comp, companyPlantIds, excludePlantIds, allDefs, onChange, onRemove }: ComponentEditorProps) {
   const { t } = useLocale();
   const [expanded, setExpanded] = useState(false);
 
@@ -769,8 +763,103 @@ function ComponentEditor({ comp, companyPlantIds, excludePlantIds, onChange, onR
         </div>
       </div>
 
+      {/* Component Technical Attributes */}
+      <AttributeEditor
+        attributes={comp.attributes ?? {}}
+        scope="COMPONENT"
+        componentType={comp.type}
+        allDefs={allDefs}
+        onChange={(attrs) => onChange({ attributes: attrs })}
+      />
+
       </div>
       )}
+    </div>
+  );
+}
+
+/** Editable attribute fields for an entity, filtered by scope and component type */
+function AttributeEditor({ attributes, scope, componentType, allDefs, onChange }: {
+  attributes: ExtensionAttributes;
+  scope: 'GCP' | 'COMPONENT' | 'SUBCOMPONENT';
+  componentType?: ComponentType;
+  allDefs: import('@shared/types/attributes.types').AttributeDefinition[];
+  onChange: (attrs: ExtensionAttributes) => void;
+}) {
+  const { t } = useLocale();
+  const definitions = getDefinitionsForScope(allDefs, scope, componentType);
+  if (definitions.length === 0) return null;
+
+  const handleChange = (key: string, raw: string, dataType: string) => {
+    const updated = { ...attributes };
+    if (raw === '') {
+      delete updated[key];
+    } else if (dataType === 'number') {
+      const n = parseFloat(raw);
+      updated[key] = isNaN(n) ? null : n;
+    } else if (dataType === 'boolean') {
+      updated[key] = raw === 'true';
+    } else {
+      updated[key] = raw;
+    }
+    onChange(updated);
+  };
+
+  // Group by def.group
+  const groups = new Map<string, typeof definitions>();
+  for (const def of definitions) {
+    const list = groups.get(def.group) || [];
+    list.push(def);
+    groups.set(def.group, list);
+  }
+
+  return (
+    <div className="border-t border-gray-700 pt-2">
+      <h5 className="text-xs font-medium text-gray-400 mb-2">{t('assetMapping.technicalAttributes')}</h5>
+      {Array.from(groups.entries()).map(([group, defs]) => (
+        <div key={group} className="mb-2">
+          <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">{t(`attrGroup.${group}` as any)}</span>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5 mt-1">
+            {defs.map(def => (
+              <div key={def.key}>
+                <label className="block text-[10px] text-gray-500 mb-0.5">
+                  {t(def.labelKey as any)}
+                  {def.unit && <span className="text-gray-600 ml-1">({def.unit})</span>}
+                </label>
+                {def.dataType === 'boolean' ? (
+                  <select
+                    value={attributes[def.key] != null ? String(attributes[def.key]) : ''}
+                    onChange={(e) => handleChange(def.key, e.target.value, def.dataType)}
+                    className="w-full bg-dark-700 border border-gray-600 rounded px-2 py-1 text-xs text-white"
+                  >
+                    <option value="">—</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                ) : def.dataType === 'enum' && def.enumValues ? (
+                  <select
+                    value={attributes[def.key] != null ? String(attributes[def.key]) : ''}
+                    onChange={(e) => handleChange(def.key, e.target.value, def.dataType)}
+                    className="w-full bg-dark-700 border border-gray-600 rounded px-2 py-1 text-xs text-white"
+                  >
+                    <option value="">—</option>
+                    {def.enumValues.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                ) : (
+                  <input
+                    type={def.dataType === 'number' ? 'number' : 'text'}
+                    step={def.dataType === 'number' ? 'any' : undefined}
+                    value={attributes[def.key] != null ? String(attributes[def.key]) : ''}
+                    onChange={(e) => handleChange(def.key, e.target.value, def.dataType)}
+                    className="w-full bg-dark-700 border border-gray-600 rounded px-2 py-1 text-xs text-white"
+                    placeholder="—"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

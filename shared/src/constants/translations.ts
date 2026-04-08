@@ -94,6 +94,43 @@ const T = {
   'settings.resolution30': { tr: '30 dk (Yarım saatlik)', en: '30 min (Half-hourly)' },
   'settings.resolution60': { tr: '60 dk (Saatlik)', en: '60 min (Hourly)' },
   'assetMapping.searchPlaceholder': { tr: 'Ara: şirket, GCP veya bileşen adı', en: 'Search: company, GCP or component name' },
+  'assetMapping.technicalAttributes': { tr: 'Teknik Özellikler', en: 'Technical Attributes' },
+  'assetMapping.noAttributes': { tr: 'Tanımlı teknik özellik yok', en: 'No technical attributes defined' },
+
+  // Attribute group labels
+  'attrGroup.electrical': { tr: 'Elektriksel', en: 'Electrical' },
+  'attrGroup.capacity': { tr: 'Kapasite', en: 'Capacity' },
+  'attrGroup.identification': { tr: 'Tanımlama', en: 'Identification' },
+
+  // Attribute Definitions Settings
+  'settings.attributeDefinitions': { tr: 'Attribute Tanımları', en: 'Attribute Definitions' },
+  'settings.attributeDefinitionsDesc': { tr: 'GCP ve Bileşen seviyesinde kullanılacak teknik özellik tanımları. Sistem tanımları düzenlenemez.', en: 'Technical attribute definitions for GCP and Component levels. System definitions are read-only.' },
+  'settings.addAttribute': { tr: 'Yeni Attribute', en: 'New Attribute' },
+  'settings.attrKey': { tr: 'Anahtar', en: 'Key' },
+  'settings.attrLabel': { tr: 'Etiket', en: 'Label' },
+  'settings.attrDataType': { tr: 'Veri Tipi', en: 'Data Type' },
+  'settings.attrUnit': { tr: 'Birim', en: 'Unit' },
+  'settings.attrScopes': { tr: 'Kapsam', en: 'Scopes' },
+  'settings.attrCompTypes': { tr: 'Bileşen Tipleri', en: 'Component Types' },
+  'settings.attrGroup': { tr: 'Grup', en: 'Group' },
+  'settings.attrCsvAliases': { tr: 'CSV Sütun Adları', en: 'CSV Column Names' },
+  'settings.systemAttribute': { tr: 'Sistem', en: 'System' },
+  'settings.adminAttribute': { tr: 'Özel', en: 'Custom' },
+  'settings.attrRequired': { tr: 'Zorunlu', en: 'Required' },
+
+  // Attribute labels
+  'attr.gcp_max_injection_mw': { tr: 'Maks. Enjeksiyon Gücü', en: 'Max Injection Power' },
+  'attr.gcp_max_consumption_mw': { tr: 'Maks. Tüketim Gücü', en: 'Max Consumption Power' },
+  'attr.gcp_dam_portfolio_id': { tr: 'DAM Portföy ID', en: 'DAM Portfolio ID' },
+  'attr.bess_max_discharge_mw': { tr: 'Maks. Deşarj Gücü', en: 'Max Discharge Power' },
+  'attr.bess_max_charge_mw': { tr: 'Maks. Şarj Gücü', en: 'Max Charge Power' },
+  'attr.bess_capacity_mwh': { tr: 'Batarya Kapasitesi', en: 'Battery Capacity' },
+  'attr.bess_charge_efficiency': { tr: 'Şarj Verimi', en: 'Charge Efficiency' },
+  'attr.bess_discharge_efficiency': { tr: 'Deşarj Verimi', en: 'Discharge Efficiency' },
+  'attr.bess_min_soc_pct': { tr: 'Min SoC', en: 'Min SoC' },
+  'attr.bess_max_soc_pct': { tr: 'Maks SoC', en: 'Max SoC' },
+  'attr.comp_installed_capacity_ac_mw': { tr: 'Kurulu Güç (AC)', en: 'Installed Capacity (AC)' },
+  'attr.comp_installed_capacity_dc_mw': { tr: 'Kurulu Güç (DC)', en: 'Installed Capacity (DC)' },
 
   // ==================== Table mode ====================
   'table.time': { tr: 'Saat', en: 'Time' },
@@ -144,12 +181,15 @@ const T = {
 
   // ==================== Battery Params ====================
   'batteryParams.title': { tr: 'Batarya Parametre Yonetimi', en: 'Battery Parameter Management' },
-  'batteryParams.batteries': { tr: 'Bataryalar:', en: 'Batteries:' },
+  'batteryParams.batteries': { tr: 'Batarya', en: 'Battery' },
+  'batteryParams.variables': { tr: 'Parametre', en: 'Variable' },
   'batteryParams.techParams': { tr: 'Teknik Parametreler', en: 'Technical Parameters' },
   'batteryParams.noBess': { tr: 'Hicbir BESS (batarya) component\'i tanimlanmamis. Ayarlardan bir BESS component ekleyin.', en: 'No BESS (battery) components configured. Add a BESS component in Settings.' },
   'batteryParams.loadingParams': { tr: 'Parametreler yukleniyor...', en: 'Loading parameters...' },
   'batteryParams.paramsSaved': { tr: 'Parametreler kaydedildi', en: 'Parameters saved' },
   'batteryParams.loadFailed': { tr: 'Parametreler yuklenemedi', en: 'Failed to load parameters' },
+  'batteryParams.syncAttributes': { tr: 'Attribute Güncelle', en: 'Sync Attributes' },
+  'batteryParams.attrSynced': { tr: '{gcps} GCP, {comps} bileşen güncellendi', en: '{gcps} GCPs, {comps} components updated' },
   'batteryParams.noDataInCsv': { tr: 'Bu batarya icin CSV\'de veri bulunamadi', en: 'No data found in CSV for this battery' },
   'batteryParams.notInCsv': { tr: '(CSV\'de yok)', en: '(not in CSV)' },
   'batteryParams.parameter': { tr: 'Parametre', en: 'Parameter' },
@@ -482,6 +522,21 @@ const T = {
   'autoMapping.warn.no_gen_or_con_keyword': { tr: '{plantName}: yön ifadesi bulunamadı, Üretim olarak atandı', en: '{plantName}: no direction keyword found, assigned as Generation by default' },
   'autoMapping.warn.duplicate_direction': { tr: '{plantName}: {direction} yönünde yinelenen tesis, atlandı', en: '{plantName}: duplicate {direction} plant in component group, skipped' },
   'autoMapping.warnings':              { tr: '{count} Uyarı', en: '{count} Warning(s)' },
+
+  // ==================== Monitoring ====================
+  'monitoring.title':              { tr: 'Canlı İzleme', en: 'Live Monitoring' },
+  'monitoring.noData':             { tr: 'Veri bulunamadı', en: 'No data found' },
+  'monitoring.connectionFailed':   { tr: 'Monitoring bağlantısı başarısız', en: 'Monitoring connection failed' },
+  'monitoring.refetching':         { tr: 'Veri yeniden çekiliyor...', en: 'Refetching data...' },
+  'monitoring.testSuccess':        { tr: 'Bağlantı başarılı', en: 'Connection successful' },
+  'monitoring.testFailed':         { tr: 'Bağlantı başarısız', en: 'Connection failed' },
+
+  // ==================== Portfolio ====================
+  'portfolio.title':               { tr: 'Portföy Eşleştirme', en: 'Portfolio Mapping' },
+  'portfolio.refresh':             { tr: 'Portföyleri Yenile', en: 'Refresh Portfolios' },
+  'portfolio.noData':              { tr: 'Portföy verisi yok. SmartPulse Portaldan çekmek için butona tıklayın.', en: 'No portfolio data. Click to fetch from SmartPulse Portal.' },
+  'portfolio.lastFetched':         { tr: 'Son güncelleme', en: 'Last fetched' },
+  'portfolio.unmatched':           { tr: 'Eşleşme bulunamadı', en: 'Unmatched' },
 } as const;
 
 export type TranslationKey = keyof typeof T;

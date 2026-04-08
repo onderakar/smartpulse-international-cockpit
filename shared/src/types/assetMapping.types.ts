@@ -1,4 +1,5 @@
 import { MTUResolution } from './plant.types';
+import { ExtensionAttributes } from './attributes.types';
 
 export type MetricTag = 'SoC' | 'ActivePower' | 'Power' | 'Other';
 
@@ -31,6 +32,8 @@ export interface GcpSubComponent {
   installedPowerMw?: number;
   /** Canonical portal plant name (for display/audit) */
   portalPlantName?: string;
+  /** Extension attributes bag — informational/technical properties */
+  attributes?: ExtensionAttributes;
 }
 
 export type ComponentType = 'BESS' | 'SOLAR' | 'WIND' | 'HYDRO' | 'THERMAL' | 'LOAD' | 'CONSUMPTION' | 'OTHER';
@@ -76,6 +79,8 @@ export interface GcpComponent {
   installedCapacityAcMw?: number;
   /** SOLAR only: DC peak capacity (PV_Capacity_MWp) */
   installedCapacityDcMwp?: number;
+  /** Extension attributes bag — informational/technical properties */
+  attributes?: ExtensionAttributes;
 }
 
 export interface GridConnectionPoint {
@@ -94,6 +99,8 @@ export interface GridConnectionPoint {
   maxConsumptionMw?: number;
   /** Porfolio_ID_DAM_GEN (note: original CSV has typo, parser handles it) */
   damPortfolioId?: string;
+  /** Extension attributes bag — informational/technical properties */
+  attributes?: ExtensionAttributes;
 }
 
 export interface CompanyMapping {

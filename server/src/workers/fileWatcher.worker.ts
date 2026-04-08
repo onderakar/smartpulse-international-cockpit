@@ -10,7 +10,7 @@ export class FileWatcherWorker {
     constructor() {
         // We assume FTP syncs drop files into a known directory.
         // For now, we watch the directory where the Node app runs, or a specific `data/ftp` folder.
-        this.watchDir = path.join(envConfig.DB_PATH, '..', 'ftp');
+        this.watchDir = path.resolve(__dirname, '../../data/ftp');
     }
 
     async start() {

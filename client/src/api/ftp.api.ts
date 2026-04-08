@@ -26,4 +26,9 @@ export const ftpApi = {
     const { data } = await apiClient.post('/ftp/write-tech-params', { direction, filename, params });
     return data;
   },
+
+  async syncAttributes(direction: string, filename: string): Promise<{ success: boolean; gcpsUpdated: number; componentsUpdated: number; skipped: number }> {
+    const { data } = await apiClient.post('/ftp/sync-attributes', { direction, filename });
+    return data;
+  },
 };

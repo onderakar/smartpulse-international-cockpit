@@ -17,6 +17,7 @@ import { UserSession } from '../store/sessions'
 import { FtpService } from './ftp.service'
 import { ConfigStoreService } from './configStore.service'
 import { parseAutoMappingCsv, BatteryColumn } from '../utils/autoMappingParser'
+import { mergeDefinitions } from '@smartpulse-intl/shared'
 import { PORTAL_BASE_URLS } from '../config/env'
 import {
   groupPlantsByGcp,
@@ -161,6 +162,23 @@ function buildComponent(
     }
     // Prefer CSV max discharge power; fall back to portal InstalledPowerMW for direct-mapped components
     comp.installedCapacityMw = bp.maxDischargePowerMw ?? directInstalledPowerMw ?? undefined
+    // Populate extension attributes from CSV
+    if (Object.keys(csvBattery.componentAttributes).length > 0) {
+      comp.attributes = csvBattery.componentAttributes
+    }
+  }
+
+  // For companion (non-BESS) components: populate installed capacity from the battery CSV row
+  // CSV stores PV_Capacity_MW_ac and PV_Capacity_MWp under the battery column,
+  // but these values belong to the companion plant sharing the same GCP.
+  if (csvBattery && type !== 'BESS') {
+    const attrs: Record<string, string | number | boolean | null> = {}
+    if (csvBattery.pvCapacityAcMw != null) attrs['comp_installed_capacity_ac_mw'] = csvBattery.pvCapacityAcMw
+    if (csvBattery.pvCapacityDcMwp != null) attrs['comp_installed_capacity_dc_mw'] = csvBattery.pvCapacityDcMwp
+    // Also set the static field for backward compatibility
+    if (csvBattery.pvCapacityAcMw != null) comp.installedCapacityAcMw = csvBattery.pvCapacityAcMw
+    if (csvBattery.pvCapacityDcMwp != null) comp.installedCapacityDcMwp = csvBattery.pvCapacityDcMwp
+    if (Object.keys(attrs).length > 0) comp.attributes = { ...comp.attributes, ...attrs }
   }
 
   return comp
@@ -233,7 +251,8 @@ export async function runAutoMapping(
     return
   }
 
-  const parsed = parseAutoMappingCsv(csvContent)
+  const allDefs = mergeDefinitions(profile.customAttributeDefinitions)
+  const parsed = parseAutoMappingCsv(csvContent, allDefs)
   for (const w of parsed.warnings) {
     allWarnings.push(w)
     emit({ step: 'warning', warnType: w.type, i18nKey: `autoMapping.warn.${w.type}`, params: { column: w.column ?? '' } })
@@ -294,7 +313,7 @@ export async function runAutoMapping(
 
       const comp = buildComponent(
         compGroup,
-        isBess ? battery : null,
+        battery,
         battery.masternode,
         emitWarn,
       )
@@ -337,6 +356,7 @@ export async function runAutoMapping(
       maxInjectionMw: battery.maxInjectionMw ?? undefined,
       maxConsumptionMw: battery.maxConsumptionMw ?? undefined,
       damPortfolioId: battery.damPortfolioId ?? undefined,
+      attributes: Object.keys(battery.gcpAttributes).length > 0 ? battery.gcpAttributes : undefined,
     }
 
     phase1Gcps.push(gcp)

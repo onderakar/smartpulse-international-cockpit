@@ -1,4 +1,5 @@
-import { BessParams, AutoMappingWarning } from '@smartpulse-intl/shared'
+import { BessParams, AutoMappingWarning, ExtensionAttributes, ATTRIBUTE_DEFINITIONS } from '@smartpulse-intl/shared'
+import type { EntityScope } from '@smartpulse-intl/shared'
 
 export interface BatteryColumn {
   name: string
@@ -11,6 +12,9 @@ export interface BatteryColumn {
   bessParams: Partial<BessParams>
   pvCapacityAcMw: number | null
   pvCapacityDcMwp: number | null
+  /** Extension attributes populated from CSV via AttributeDefinition mappings */
+  gcpAttributes: ExtensionAttributes
+  componentAttributes: ExtensionAttributes
 }
 
 export interface CsvParseResult {
@@ -42,7 +46,40 @@ function parseStr(raw: string | undefined): string | null {
   return s === '' || s === '-' ? null : s
 }
 
-export function parseAutoMappingCsv(csvContent: string): CsvParseResult {
+/** Build extension attributes from CSV row data using attribute definitions */
+function buildAttributesFromCsv(
+  getRow: (key: string) => string[],
+  idx: number,
+  scope: EntityScope,
+  allDefs: readonly import('@smartpulse-intl/shared').AttributeDefinition[],
+  componentType?: string,
+): ExtensionAttributes {
+  const attrs: ExtensionAttributes = {}
+  for (const def of allDefs) {
+    if (!def.entityScopes.includes(scope)) continue
+    if (def.componentTypes && componentType && !def.componentTypes.includes(componentType as any)) continue
+    if (!def.csvColumnAliases?.length) continue
+    for (const alias of def.csvColumnAliases) {
+      const values = getRow(alias)
+      const raw = values[idx]
+      if (raw !== undefined && raw.trim() !== '' && raw.trim() !== '-') {
+        if (def.dataType === 'number') {
+          const n = parseFloat(raw.trim().replace(/\s/g, '').replace(',', '.'))
+          attrs[def.key] = isNaN(n) ? null : n
+        } else {
+          attrs[def.key] = raw.trim()
+        }
+        break
+      }
+    }
+  }
+  return attrs
+}
+
+export function parseAutoMappingCsv(
+  csvContent: string,
+  allDefs: readonly import('@smartpulse-intl/shared').AttributeDefinition[] = ATTRIBUTE_DEFINITIONS,
+): CsvParseResult {
   const warnings: AutoMappingWarning[] = []
   const lines = csvContent.split(/\r?\n/).filter(l => l.trim() !== '')
 
@@ -102,6 +139,8 @@ export function parseAutoMappingCsv(csvContent: string): CsvParseResult {
       bessParams,
       pvCapacityAcMw:   parseNum(getRow('pv_capacity_mw_ac')[idx]),
       pvCapacityDcMwp:  parseNum(getRow('pv_capacity_mwp')[idx]),
+      gcpAttributes:       buildAttributesFromCsv(getRow, idx, 'GCP', allDefs),
+      componentAttributes: buildAttributesFromCsv(getRow, idx, 'COMPONENT', allDefs, 'BESS'),
     }
   })
 
