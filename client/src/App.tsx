@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ProfileProvider } from './context/ProfileContext';
 import { ForecastProvider } from './context/ForecastContext';
 import { AlertProvider } from './context/AlertContext';
+import { MonitoringProvider } from './context/MonitoringContext';
 import { LocaleProvider } from './context/LocaleContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
@@ -24,6 +25,7 @@ export function App() {
         <LocaleProvider>
         <AuthProvider>
           <ProfileProvider>
+            <MonitoringProvider>
             <ForecastProvider>
             <AlertProvider>
             <Routes>
@@ -41,6 +43,7 @@ export function App() {
             </Routes>
             </AlertProvider>
             </ForecastProvider>
+            </MonitoringProvider>
             <Toaster
               position="top-right"
               toastOptions={{

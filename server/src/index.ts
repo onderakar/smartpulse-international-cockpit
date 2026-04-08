@@ -2,6 +2,7 @@ import { createApp } from './app';
 import { envConfig } from './config/env';
 
 import { FileWatcherWorker } from './workers/fileWatcher.worker';
+import { ScadaWorker } from './workers/scada.worker';
 import { setupWebSocket } from './websocket';
 
 async function main() {
@@ -23,6 +24,10 @@ async function main() {
   // Initialize workers in background
   const fileWatcher = new FileWatcherWorker();
   fileWatcher.start().catch(err => console.error('[FileWatcherWorker] Failed to start:', err));
+
+  const scadaWorker = new ScadaWorker(envConfig.SCADA_POLL_INTERVAL_MS);
+  scadaWorker.start().catch(err => console.error('[ScadaWorker] Failed to start:', err));
+
   console.log('  Workers:     [STARTING]');
 }
 

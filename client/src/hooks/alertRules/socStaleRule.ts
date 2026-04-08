@@ -11,7 +11,7 @@ export interface AlertRuleContext {
   currentBapPowerMW: number | null;
   currentSocMwh: number | null;
   data: LiveMonitoringData | null;
-  lastUpdated: number | null;
+  lastUpdated: Date | number | null;
   scheduleRows?: ScheduleRow[];
 }
 

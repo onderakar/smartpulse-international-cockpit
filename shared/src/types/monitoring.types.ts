@@ -23,3 +23,10 @@ export interface LiveSnapshot {
   bapMW: number | null
   timestamp: number | null
 }
+
+/** Raw metric point returned from DB query via REST API */
+export interface RawMetricPoint {
+  timestamp: number
+  type: string    // 'SOC' | 'BAP' | 'POWER_3054' etc.
+  value: number
+}
