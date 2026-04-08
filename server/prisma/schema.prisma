@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Assets: GCPs and Components tracked for monitoring
+model Asset {
+  id              Int      @id @default(autoincrement())
+  parentId        Int?
+  name            String   @unique   // "GCP_{gcpId}" or "COMP_{componentId}"
+  type            String              // GCP, BESS, SOLAR, WIND, HYDRO, THERMAL, LOAD, OTHER
+  portalCompanyId Int?
+  portalGroupId   Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  parent   Asset?  @relation("AssetHierarchy", fields: [parentId], references: [id])
+  children Asset[] @relation("AssetHierarchy")
+  metrics  TimeSeriesData[]
+}
+
+// Data sources: SCADA_API, etc.
+model DataSource {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  metrics TimeSeriesData[]
+}
+
+// Metric types: BAP, SOC, POWER_3054, etc.
+model MetricType {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  unit      String
+  createdAt DateTime @default(now())
+
+  metrics TimeSeriesData[]
+}
+
+// Time series data (TimescaleDB hypertable target)
+model TimeSeriesData {
+  effectiveTime DateTime
+  recordedTime  DateTime @default(now())
+  assetId       Int
+  metricTypeId  Int
+  dataSourceId  Int
+  value         Float
+
+  asset      Asset      @relation(fields: [assetId], references: [id])
+  metricType MetricType @relation(fields: [metricTypeId], references: [id])
+  dataSource DataSource @relation(fields: [dataSourceId], references: [id])
+
+  @@id([effectiveTime, assetId, metricTypeId, dataSourceId, recordedTime])
+  @@index([effectiveTime(sort: Desc)])
+  @@index([assetId, metricTypeId])
+}
+
+// ── Configuration ──
+
+model GroupProfile {
+  id                         String   @id               // portal groupId e.g. "123"
+  name                       String
+  portalEnv                  String   @default("prod")  // "prod" | "staging" | "demo"
+  assetMapping               Json     @default("{}")    // full AssetMapping as JSONB
+  polling                    Json                       // PollingConfig as JSONB
+  monitoringCredentials      Json?                      // { username, password }
+  graphQlApiKey              String?
+  scheduleBapEditable        Boolean  @default(false)
+  defaultResolutionMinutes   Int?
+  customAttributeDefinitions Json?                      // AttributeDefinition[]
+  portfolioMap               Json?                      // Record<number, PortfolioData>
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  users UserProfile[]
+}
+
+model UserProfile {
+  id           String       @id               // username
+  groupId      String
+  widgetLayout Json?                          // WidgetLayoutItem[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  group GroupProfile @relation(fields: [groupId], references: [id])
+
+  @@index([groupId])
+}
+
+// ── Schedule Revisions ──
+
+model ScheduleRevision {
+  id            Int      @id @default(autoincrement())
+  gcpId         Int
+  dateKey       String                        // "2026-04-08"
+  deliveryStart String                        // slot key
+  row           Json                          // full ScheduleRow
+  fetchedAt     BigInt                        // epoch ms
+  contentHash   String
+  source        String   @default("ftp")      // "ftp" | "user_save"
+  createdAt     DateTime @default(now())
+
+  @@unique([gcpId, dateKey, deliveryStart, contentHash])
+  @@index([gcpId, dateKey])
+}

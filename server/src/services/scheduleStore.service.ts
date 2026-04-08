@@ -1,55 +1,19 @@
-import path from 'path';
-import fs from 'fs/promises';
+import { PrismaClient } from '@prisma/client';
 import { ScheduleRow, ScheduleSlotRevision, ScheduleRevisionStore } from '@smartpulse-intl/shared';
 import { computeRowHash, computeCsvHash } from '../utils/scheduleParser';
 
-interface ScheduleDbSchema {
-  schedules: Record<string, ScheduleRevisionStore>;
-}
+const prisma = new PrismaClient();
 
-const DEFAULT_DATA: ScheduleDbSchema = { schedules: {} };
-
+/**
+ * Schedule revision store backed by PostgreSQL via Prisma.
+ * Replaces the old LowDB-based implementation.
+ */
 export class ScheduleStoreService {
-  private db: any = null;
-  private initPromise: Promise<void> | null = null;
-
-  async init(): Promise<void> {
-    if (this.db) return;
-    if (this.initPromise) return this.initPromise;
-    this.initPromise = this._doInit();
-    return this.initPromise;
-  }
-
-  private async _doInit(): Promise<void> {
-    const dbPath = path.resolve(__dirname, '../../data/schedules.json');
-    const dbDir = path.dirname(dbPath);
-    await fs.mkdir(dbDir, { recursive: true });
-
-    const { Low } = await import('lowdb');
-    const { JSONFile } = await import('lowdb/node');
-
-    const adapter = new JSONFile<ScheduleDbSchema>(dbPath);
-    this.db = new Low<ScheduleDbSchema>(adapter, DEFAULT_DATA);
-
-    await this.db.read();
-    if (!this.db.data) {
-      this.db.data = DEFAULT_DATA;
-      await this.db.write();
-    }
-
-    console.log(`[ScheduleStore] LowDB initialized at ${dbPath}`);
-  }
-
-  private getDb() {
-    if (!this.db) {
-      throw new Error('ScheduleStoreService not initialized. Call init() first.');
-    }
-    return this.db;
-  }
+  /** No-op — kept for backward compatibility. */
+  async init(): Promise<void> {}
 
   /**
    * Bulk sync schedule from FTP Native File Metadata (Current + Consumed modes)
-   * This is entirely idempotent and traces history using Portal's true modification metrics.
    */
   async syncScheduleFromFtp(
     plantId: number,
@@ -59,53 +23,44 @@ export class ScheduleStoreService {
     env: string,
     scheduleBaseName?: string
   ): Promise<{ hasChanges: boolean; rows: ScheduleRow[]; header: string[] }> {
-    const db = this.getDb();
-    await db.read();
-
     const baseName = scheduleBaseName || `Battery_Schedule_${plantId}`;
 
-    // Fetch active schedule via direct file read (root directory bug workaround)
     const currentTask = ftpService.getFileWithMeta(cookies, env, 'outgoing', `${baseName}.csv`)
       .then((res: any) => res && res.FileData ? [res] : [])
       .catch(() => []);
 
-    // Fetch historical backups via GetFiles
     const consumedTask = ftpService.listFiles(cookies, env, 'outgoing', 'Consumed', baseName, true);
 
     const [currentFiles, consumedFiles] = await Promise.all([currentTask, consumedTask]);
 
-    // Combine and sort by true modification date ascending
     const allFiles = [...(currentFiles || []), ...(consumedFiles || [])]
       .filter((f: any) => f && f.FileData && f.ModifyDate)
       .sort((a: any, b: any) => new Date(a.ModifyDate).getTime() - new Date(b.ModifyDate).getTime());
-
-    const { parseScheduleCsv, computeRowHash } = require('../utils/scheduleParser');
-
-    const storeKey = `${plantId}:${dateKey}`;
-    const previousStore = db.data.schedules[storeKey] as ScheduleRevisionStore | undefined;
-
-    // Start from existing store to preserve ALL previous revisions (ftp + user_save)
-    const slots: Record<string, ScheduleSlotRevision[]> = {};
-    if (previousStore?.slots) {
-      for (const key of Object.keys(previousStore.slots)) {
-        const revs = previousStore.slots[key];
-        slots[key] = Array.isArray(revs) ? [...revs] : [revs as any];
-      }
-    }
-
-    let latestHeader: string[] = [];
 
     if (allFiles.length === 0) {
       return { hasChanges: false, rows: [], header: [] };
     }
 
-    // Add FTP file revisions (only if they don't already exist)
+    const { parseScheduleCsv } = require('../utils/scheduleParser');
+
+    // Load existing revisions from DB into in-memory map for dedup
+    const existingRevs = await prisma.scheduleRevision.findMany({
+      where: { gcpId: plantId, dateKey },
+    });
+    const existingSet = new Set(
+      existingRevs.map(r => `${r.deliveryStart}:${r.contentHash}:${r.fetchedAt}`)
+    );
+
+    let latestHeader: string[] = [];
+    const newRevisions: Array<{
+      gcpId: number; dateKey: string; deliveryStart: string;
+      row: any; fetchedAt: bigint; contentHash: string; source: string;
+    }> = [];
+
     for (const file of allFiles) {
       try {
         const parsed = parseScheduleCsv(file.FileData);
-        if (parsed.header.length > 0) {
-          latestHeader = parsed.header;
-        }
+        if (parsed.header.length > 0) latestHeader = parsed.header;
 
         const modifyTimeMs = new Date(file.ModifyDate).getTime();
 
@@ -113,64 +68,48 @@ export class ScheduleStoreService {
           const slotKey = row.Delivery_Start;
           const rowHash = computeRowHash(row);
 
-          if (!slots[slotKey]) {
-            slots[slotKey] = [];
-          }
+          // Check if this exact revision already exists
+          const key = `${slotKey}:${rowHash}:${modifyTimeMs}`;
+          if (existingSet.has(key)) continue;
 
-          // Check if this exact revision (same hash + same timestamp) already exists
-          const alreadyExists = slots[slotKey].some(
-            r => r.contentHash === rowHash && Math.abs(r.fetchedAt - modifyTimeMs) < 1000
-          );
+          // Check if latest revision for this slot has same hash (no real change)
+          const latestForSlot = existingRevs
+            .filter(r => r.deliveryStart === slotKey)
+            .sort((a, b) => Number(a.fetchedAt) - Number(b.fetchedAt));
+          const latest = latestForSlot[latestForSlot.length - 1];
+          if (latest && latest.contentHash === rowHash) continue;
 
-          if (!alreadyExists) {
-            const existingVersions = slots[slotKey];
-            const latestVersion = existingVersions[existingVersions.length - 1];
-
-            if (!latestVersion || latestVersion.contentHash !== rowHash) {
-              slots[slotKey].push({
-                deliveryStart: slotKey,
-                row: { ...row },
-                fetchedAt: modifyTimeMs,
-                contentHash: rowHash,
-                source: 'ftp',
-              });
-            }
-          }
+          newRevisions.push({
+            gcpId: plantId,
+            dateKey,
+            deliveryStart: slotKey,
+            row: { ...row },
+            fetchedAt: BigInt(modifyTimeMs),
+            contentHash: rowHash,
+            source: 'ftp',
+          });
+          existingSet.add(key);
         }
       } catch (err) {
-        console.warn(`[ScheduleStore] skipping unparseable FTP file ${file.FileName}`, err);
+        console.warn(`[ScheduleStore] skipping unparseable FTP file`, err);
       }
     }
 
-    // Sort all slot revisions by fetchedAt
-    for (const key of Object.keys(slots)) {
-      slots[key].sort((a, b) => a.fetchedAt - b.fetchedAt);
+    if (newRevisions.length > 0) {
+      await prisma.scheduleRevision.createMany({
+        data: newRevisions,
+        skipDuplicates: true,
+      });
     }
 
-    let hasChanges = true;
+    // Get current schedule (latest revision per slot)
+    const currentRows = await this.getCurrentSchedule(plantId, dateKey);
 
-    db.data.schedules[storeKey] = {
-      gcpId: plantId,
-      dateKey,
-      slots,
-      lastFetchedAt: Date.now(),
-      lastCsvHash: '', // irrelevant now
-    };
-    await db.write();
-
-    // Extract current active snapshot for the requested dateKey
-    const targetDatePrefix = dateKey;
-    const currentRows = Object.values(slots)
-      .map(versions => versions[versions.length - 1].row)
-      .filter(row => row.Delivery_Start.startsWith(targetDatePrefix))
-      .sort((a, b) => a.Delivery_Start.localeCompare(b.Delivery_Start));
-
-    return { hasChanges, rows: currentRows, header: latestHeader };
+    return { hasChanges: newRevisions.length > 0, rows: currentRows, header: latestHeader };
   }
 
   /**
    * Process a freshly fetched schedule CSV. (LEGACY fallback)
-   * Compares with stored revisions and only updates changed slots.
    */
   async processSchedule(
     plantId: number,
@@ -178,64 +117,42 @@ export class ScheduleStoreService {
     rows: ScheduleRow[],
     csvContent: string
   ): Promise<{ hasChanges: boolean }> {
-    const db = this.getDb();
-    await db.read();
-
-    const storeKey = `${plantId}:${dateKey}`;
-    const csvHash = computeCsvHash(csvContent);
     const now = Date.now();
-
-    const existing = db.data.schedules[storeKey] as ScheduleRevisionStore | undefined;
-
-    // Quick check: if CSV hash is the same, no changes
-    if (existing && existing.lastCsvHash === csvHash) {
-      // Update fetch timestamp only
-      existing.lastFetchedAt = now;
-      await db.write();
-      return { hasChanges: false };
-    }
-
-    // Row-level diff
     let hasChanges = false;
-    const slots: Record<string, ScheduleSlotRevision[]> = existing?.slots ? { ...existing.slots } : {};
 
-    // Backward compatibility for existing schemas. Convert legacy objects to arrays.
-    for (const key of Object.keys(slots)) {
-      if (!Array.isArray(slots[key])) {
-        slots[key] = [slots[key] as any];
-      }
-    }
+    // Load existing latest revisions per slot
+    const existing = await this.getLatestRevisionPerSlot(plantId, dateKey);
+
+    const newRevisions: Array<{
+      gcpId: number; dateKey: string; deliveryStart: string;
+      row: any; fetchedAt: bigint; contentHash: string; source: string;
+    }> = [];
 
     for (const row of rows) {
       const slotKey = row.Delivery_Start;
       const rowHash = computeRowHash(row);
-      const existingVersions = slots[slotKey] || [];
-      const latestVersion = existingVersions[existingVersions.length - 1];
+      const latest = existing.get(slotKey);
 
-      if (!latestVersion || latestVersion.contentHash !== rowHash) {
+      if (!latest || latest.contentHash !== rowHash) {
         hasChanges = true;
-
-        slots[slotKey] = [
-          ...existingVersions,
-          {
-            deliveryStart: slotKey,
-            row: { ...row },
-            fetchedAt: now,
-            contentHash: rowHash,
-            source: 'ftp',
-          }
-        ];
+        newRevisions.push({
+          gcpId: plantId,
+          dateKey,
+          deliveryStart: slotKey,
+          row: { ...row },
+          fetchedAt: BigInt(now),
+          contentHash: rowHash,
+          source: 'ftp',
+        });
       }
     }
 
-    db.data.schedules[storeKey] = {
-      gcpId: plantId,
-      dateKey,
-      slots,
-      lastFetchedAt: now,
-      lastCsvHash: csvHash,
-    };
-    await db.write();
+    if (newRevisions.length > 0) {
+      await prisma.scheduleRevision.createMany({
+        data: newRevisions,
+        skipDuplicates: true,
+      });
+    }
 
     return { hasChanges };
   }
@@ -244,30 +161,30 @@ export class ScheduleStoreService {
    * Get the current schedule (latest revision of each slot).
    */
   async getCurrentSchedule(plantId: number, dateKey: string): Promise<ScheduleRow[]> {
-    const db = this.getDb();
-    await db.read();
+    // Get all revisions, then pick latest per deliveryStart in JS
+    // (Prisma doesn't support DISTINCT ON)
+    const revisions = await prisma.scheduleRevision.findMany({
+      where: { gcpId: plantId, dateKey },
+      orderBy: { fetchedAt: 'asc' },
+    });
 
-    const storeKey = `${plantId}:${dateKey}`;
-    const store = db.data.schedules[storeKey] as ScheduleRevisionStore | undefined;
+    const latestBySlot = new Map<string, any>();
+    for (const rev of revisions) {
+      latestBySlot.set(rev.deliveryStart, rev);
+    }
 
-    if (!store?.slots) return [];
-
-    return Object.values(store.slots)
-      .map(versions => (Array.isArray(versions) ? versions[versions.length - 1] : versions).row)
+    return Array.from(latestBySlot.values())
+      .map(rev => rev.row as ScheduleRow)
       .sort((a, b) => a.Delivery_Start.localeCompare(b.Delivery_Start));
   }
 
   /**
-   * Record a user save to LowDB with source: 'user_save'.
-   * Called after FTP write succeeds.
+   * Record a user save with source: 'user_save'.
    */
   async recordUserSave(plantId: number, rows: ScheduleRow[]): Promise<void> {
-    const db = this.getDb();
-    await db.read();
-
     const now = Date.now();
 
-    // Group rows by dateKey (derived from Delivery_Start)
+    // Group by dateKey
     const byDate = new Map<string, ScheduleRow[]>();
     for (const row of rows) {
       const dateKey = row.Delivery_Start.slice(0, 10);
@@ -276,188 +193,189 @@ export class ScheduleStoreService {
     }
 
     for (const [dateKey, dateRows] of byDate) {
-      const storeKey = `${plantId}:${dateKey}`;
-      const existing = db.data.schedules[storeKey] as ScheduleRevisionStore | undefined;
-      const slots: Record<string, ScheduleSlotRevision[]> = existing?.slots ? { ...existing.slots } : {};
+      const existing = await this.getLatestRevisionPerSlot(plantId, dateKey);
 
-      // Ensure arrays
-      for (const key of Object.keys(slots)) {
-        if (!Array.isArray(slots[key])) {
-          slots[key] = [slots[key] as any];
-        }
-      }
+      const newRevisions: Array<{
+        gcpId: number; dateKey: string; deliveryStart: string;
+        row: any; fetchedAt: bigint; contentHash: string; source: string;
+      }> = [];
 
       let savedCount = 0;
       for (const row of dateRows) {
         const slotKey = row.Delivery_Start;
         const rowHash = computeRowHash(row);
-        const existingVersions = slots[slotKey] || [];
-        const latestVersion = existingVersions[existingVersions.length - 1];
+        const latest = existing.get(slotKey);
 
-        if (!latestVersion || latestVersion.contentHash !== rowHash) {
-          slots[slotKey] = [
-            ...existingVersions,
-            {
-              deliveryStart: slotKey,
-              row: { ...row },
-              fetchedAt: now,
-              contentHash: rowHash,
-              source: 'user_save',
-            },
-          ];
+        if (!latest || latest.contentHash !== rowHash) {
+          newRevisions.push({
+            gcpId: plantId,
+            dateKey,
+            deliveryStart: slotKey,
+            row: { ...row },
+            fetchedAt: BigInt(now),
+            contentHash: rowHash,
+            source: 'user_save',
+          });
           savedCount++;
         }
       }
-      console.log(`[ScheduleStore] recordUserSave: plantId=${plantId} dateKey=${dateKey} — ${savedCount} new user_save revisions (${dateRows.length} rows total)`);
 
-      db.data.schedules[storeKey] = {
-        gcpId: plantId,
-        dateKey,
-        slots,
-        lastFetchedAt: now,
-        lastCsvHash: existing?.lastCsvHash ?? '',
-      };
+      if (newRevisions.length > 0) {
+        await prisma.scheduleRevision.createMany({
+          data: newRevisions,
+          skipDuplicates: true,
+        });
+      }
+      console.log(`[ScheduleStore] recordUserSave: plantId=${plantId} dateKey=${dateKey} — ${savedCount} new user_save revisions`);
     }
-
-    await db.write();
   }
 
   /**
-   * Merge FTP-read rows with protected past slots from LowDB.
-   * Handles TWO scenarios:
-   *   1. Past slots ZEROED in FTP → restore last non-zero value from history
-   *   2. Past slots REMOVED from FTP → add them back from history
+   * Merge FTP-read rows with protected past slots from DB.
    */
   async mergeWithProtectedPast(
     plantId: number,
     dateKey: string,
     ftpRows: ScheduleRow[]
   ): Promise<ScheduleRow[]> {
-    const db = this.getDb();
-    await db.read();
+    const revisions = await prisma.scheduleRevision.findMany({
+      where: { gcpId: plantId, dateKey },
+      orderBy: { fetchedAt: 'asc' },
+    });
 
-    const storeKey = `${plantId}:${dateKey}`;
-    const store = db.data.schedules[storeKey] as ScheduleRevisionStore | undefined;
+    if (revisions.length === 0) return ftpRows;
 
-    if (!store?.slots) return ftpRows;
+    // Group revisions by deliveryStart
+    const slotRevisions = new Map<string, typeof revisions>();
+    for (const rev of revisions) {
+      if (!slotRevisions.has(rev.deliveryStart)) slotRevisions.set(rev.deliveryStart, []);
+      slotRevisions.get(rev.deliveryStart)!.push(rev);
+    }
 
     const nowIso = new Date().toISOString();
     let protectedCount = 0;
     let restoredCount = 0;
 
-    // Phase 1: Protect zeroed past slots in ftpRows
+    // Phase 1: Protect zeroed past slots
     const result = ftpRows.map(row => {
-      // If this slot's Delivery_End is in the future, use FTP value as-is
       if (row.Delivery_End > nowIso) return row;
 
-      // Past slot — check if FTP zeroed it but we have history
       const slotKey = row.Delivery_Start;
-      const revisions = store.slots[slotKey];
-      if (!revisions || !Array.isArray(revisions) || revisions.length === 0) return row;
+      const slotRevs = slotRevisions.get(slotKey);
+      if (!slotRevs || slotRevs.length === 0) return row;
 
       const ftpBap = Number(row.Battery_Active_Power_MW) || 0;
-
-      // If FTP still has a non-zero value, trust it
       if (ftpBap !== 0) return row;
 
-      // FTP returned 0 for a past slot — look for a better value in history
-      // Prefer user_save, then any source
-      const restored = this.findLastNonZeroBap(revisions);
+      const restored = this.findLastNonZeroBap(slotRevs);
       if (restored) {
         protectedCount++;
-        console.log(`[ScheduleStore] PROTECTED past slot ${slotKey}: FTP=0 → restored ${restored.bap} MW (${restored.source})`);
         return { ...row, Battery_Active_Power_MW: restored.bap };
       }
-
-      // All revisions are 0 — genuinely idle
       return row;
     });
 
-    // Phase 2: Restore past slots that were REMOVED from FTP entirely
+    // Phase 2: Restore removed past slots
     const ftpSlotKeys = new Set(ftpRows.map(r => r.Delivery_Start));
 
-    for (const [slotKey, revisions] of Object.entries(store.slots)) {
-      if (ftpSlotKeys.has(slotKey)) continue; // already in FTP response
-      if (!Array.isArray(revisions) || revisions.length === 0) continue;
+    for (const [slotKey, slotRevs] of slotRevisions) {
+      if (ftpSlotKeys.has(slotKey)) continue;
+      if (slotRevs.length === 0) continue;
 
-      // Use the latest revision's row to check Delivery_End
-      const latestRow = revisions[revisions.length - 1].row;
-      if (latestRow.Delivery_End > nowIso) continue; // future/active — don't add
+      const latestRow = slotRevs[slotRevs.length - 1].row as ScheduleRow;
+      if (latestRow.Delivery_End > nowIso) continue;
 
-      // Find last non-zero value from history
-      const restored = this.findLastNonZeroBap(revisions);
+      const restored = this.findLastNonZeroBap(slotRevs);
       if (restored) {
         restoredCount++;
-        console.log(`[ScheduleStore] RESTORED removed slot ${slotKey}: ${restored.bap} MW (${restored.source})`);
-        // Use the full row from the revision that had the non-zero value
         result.push({ ...restored.row, Battery_Active_Power_MW: restored.bap });
       }
     }
 
-    // Sort by Delivery_Start to maintain order
     result.sort((a, b) => a.Delivery_Start.localeCompare(b.Delivery_Start));
 
     if (protectedCount > 0 || restoredCount > 0) {
-      console.log(`[ScheduleStore] mergeWithProtectedPast: plantId=${plantId} dateKey=${dateKey} — ${protectedCount} zeroed slots protected, ${restoredCount} removed slots restored`);
+      console.log(`[ScheduleStore] mergeWithProtectedPast: plantId=${plantId} dateKey=${dateKey} — ${protectedCount} protected, ${restoredCount} restored`);
     }
 
     return result;
   }
 
-  /**
-   * Find the last non-zero BAP value in a slot's revision history.
-   * Prefers user_save source, falls back to any source.
-   */
-  private findLastNonZeroBap(revisions: ScheduleSlotRevision[]): { bap: number; source: string; row: ScheduleRow } | null {
-    // First pass: prefer user_save
+  private findLastNonZeroBap(revisions: any[]): { bap: number; source: string; row: ScheduleRow } | null {
+    // Prefer user_save
     for (let i = revisions.length - 1; i >= 0; i--) {
       const rev = revisions[i];
-      const bap = Number(rev.row.Battery_Active_Power_MW) || 0;
+      const row = rev.row as ScheduleRow;
+      const bap = Number(row.Battery_Active_Power_MW) || 0;
       if (rev.source === 'user_save' && bap !== 0) {
-        return { bap, source: 'user_save', row: rev.row };
+        return { bap, source: 'user_save', row };
       }
     }
-    // Second pass: any source
+    // Any source
     for (let i = revisions.length - 1; i >= 0; i--) {
       const rev = revisions[i];
-      const bap = Number(rev.row.Battery_Active_Power_MW) || 0;
+      const row = rev.row as ScheduleRow;
+      const bap = Number(row.Battery_Active_Power_MW) || 0;
       if (bap !== 0) {
-        return { bap, source: rev.source || 'ftp', row: rev.row };
+        return { bap, source: rev.source || 'ftp', row };
       }
     }
     return null;
   }
 
-  /**
-   * Get revision history for a specific slot.
-   */
   async getSlotHistory(plantId: number, dateKey: string, deliveryStart: string): Promise<ScheduleSlotRevision[]> {
-    const db = this.getDb();
-    await db.read();
+    const revisions = await prisma.scheduleRevision.findMany({
+      where: { gcpId: plantId, dateKey, deliveryStart },
+      orderBy: { fetchedAt: 'asc' },
+    });
 
-    const storeKey = `${plantId}:${dateKey}`;
-    const store = db.data.schedules[storeKey] as ScheduleRevisionStore | undefined;
-
-    if (!store?.slots) return [];
-
-    const revisions = store.slots[deliveryStart];
-    if (!revisions || !Array.isArray(revisions)) return [];
-
-    return revisions;
+    return revisions.map(r => ({
+      deliveryStart: r.deliveryStart,
+      row: r.row as ScheduleRow,
+      fetchedAt: Number(r.fetchedAt),
+      contentHash: r.contentHash,
+      source: r.source,
+    }));
   }
 
-  /** Get complete revision history */
   async getScheduleHistory(plantId: number, dateKey: string) {
-    const db = this.getDb();
-    await db.read();
+    const revisions = await prisma.scheduleRevision.findMany({
+      where: { gcpId: plantId, dateKey },
+      orderBy: { fetchedAt: 'asc' },
+    });
 
-    const storeKey = `${plantId}:${dateKey}`;
-    const store = db.data.schedules[storeKey] as ScheduleRevisionStore | undefined;
+    const slots: Record<string, ScheduleSlotRevision[]> = {};
+    for (const r of revisions) {
+      if (!slots[r.deliveryStart]) slots[r.deliveryStart] = [];
+      slots[r.deliveryStart].push({
+        deliveryStart: r.deliveryStart,
+        row: r.row as ScheduleRow,
+        fetchedAt: Number(r.fetchedAt),
+        contentHash: r.contentHash,
+        source: r.source,
+      });
+    }
 
-    if (!store?.slots) return { slots: {}, lastFetchedAt: 0 };
+    const lastRev = revisions[revisions.length - 1];
     return {
-      slots: store.slots,
-      lastFetchedAt: store.lastFetchedAt,
+      slots,
+      lastFetchedAt: lastRev ? Number(lastRev.fetchedAt) : 0,
     };
+  }
+
+  // ── Private helpers ──
+
+  private async getLatestRevisionPerSlot(plantId: number, dateKey: string): Promise<Map<string, { contentHash: string }>> {
+    const revisions = await prisma.scheduleRevision.findMany({
+      where: { gcpId: plantId, dateKey },
+      orderBy: { fetchedAt: 'asc' },
+      select: { deliveryStart: true, contentHash: true },
+    });
+
+    const latest = new Map<string, { contentHash: string }>();
+    for (const r of revisions) {
+      latest.set(r.deliveryStart, { contentHash: r.contentHash });
+    }
+    return latest;
   }
 }

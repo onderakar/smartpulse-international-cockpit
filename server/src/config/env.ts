@@ -3,9 +3,6 @@ import path from 'path';
 // Load .env from project root (parent of server/)
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
-// Resolve DB path relative to server directory (not CWD)
-const defaultDbPath = path.resolve(__dirname, '../../data/db.json');
-
 export const envConfig = {
   PORT: parseInt(process.env.PORT || '3001', 10),
   NODE_ENV: process.env.NODE_ENV || 'development',
@@ -18,8 +15,11 @@ export const envConfig = {
   // Monitoring API base URL
   MONITORING_BASE_URL: process.env.MONITORING_BASE_URL || 'https://api.connectivity.smartpulse.io',
 
-  // LowDB database file path
-  DB_PATH: process.env.DB_PATH || defaultDbPath,
+  // PostgreSQL database URL (for Prisma / TimescaleDB)
+  DATABASE_URL: process.env.DATABASE_URL || 'postgresql://localhost:5432/smartpulse_intl',
+
+  // SCADA Worker polling interval
+  SCADA_POLL_INTERVAL_MS: parseInt(process.env.SCADA_POLL_INTERVAL_MS || '15000', 10),
 
   // Worker Credentials
   PORTAL_USERNAME: process.env.PORTAL_USERNAME,

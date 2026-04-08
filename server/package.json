@@ -10,6 +10,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.3",
     "@smartpulse-intl/shared": "*",
     "axios": "^1.7.9",
     "axios-cookiejar-support": "^5.0.5",
@@ -18,7 +19,6 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "express-session": "^1.18.1",
-    "lowdb": "^7.0.1",
     "socket.io": "^4.8.3",
     "tough-cookie": "^5.1.0",
     "uuid": "^11.0.5"
@@ -32,6 +32,7 @@
     "@types/socket.io": "^3.0.1",
     "@types/tough-cookie": "^4.0.5",
     "@types/uuid": "^10.0.0",
+    "prisma": "^6.19.3",
     "tsx": "^4.19.3",
     "typescript": "^5.7.3",
     "vitest": "^4.1.2"

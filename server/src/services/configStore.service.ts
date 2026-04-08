@@ -1,342 +1,292 @@
-import path from 'path';
-import fs from 'fs/promises';
-import { DashboardProfile, GroupProfile, UserProfile, migrateAssetMapping } from '@smartpulse-intl/shared';
-import { envConfig } from '../config/env';
+import { PrismaClient } from '@prisma/client';
+import { DashboardProfile, GroupProfile, UserProfile } from '@smartpulse-intl/shared';
 
-const MAX_BACKUPS = 20;
+const DEFAULT_POLLING = {
+  intervalSeconds: 60,
+  maxWindowHours: 3,
+  incrementalWindowMinutes: 10,
+  scheduleIntervalSeconds: 300,
+};
 
-interface DatabaseSchema {
-  groups: Record<string, GroupProfile>;
-  users: Record<string, UserProfile>;
-}
+const prisma = new PrismaClient();
 
-/** Legacy schema for migration detection */
-interface LegacyDatabaseSchema {
-  users: Record<string, DashboardProfile>;
-}
-
-const DEFAULT_DATA: DatabaseSchema = { groups: {}, users: {} };
-
-/** Fields that belong to GroupProfile */
-const GROUP_FIELDS = ['portalEnv', 'assetMapping', 'polling', 'monitoringCredentials', 'graphQlApiKey', 'scheduleBapEditable'] as const;
-
+/**
+ * Configuration store backed by PostgreSQL via Prisma.
+ * Replaces the old LowDB-based implementation.
+ *
+ * Public API is preserved for backward compatibility with all route handlers.
+ */
 export class ConfigStoreService {
-  private db: any = null;
-  private initPromise: Promise<void> | null = null;
-
+  /** No-op — kept for backward compatibility with callers that call init(). */
   async init(): Promise<void> {
-    if (this.db) return;
-    if (this.initPromise) return this.initPromise;
-
-    this.initPromise = this._doInit();
-    return this.initPromise;
-  }
-
-  private async _doInit(): Promise<void> {
-    const dbDir = path.dirname(envConfig.DB_PATH);
-    await fs.mkdir(dbDir, { recursive: true });
-
-    const { Low } = await import('lowdb');
-    const { JSONFile } = await import('lowdb/node');
-
-    const adapter = new JSONFile<DatabaseSchema>(envConfig.DB_PATH);
-    this.db = new Low<DatabaseSchema>(adapter, DEFAULT_DATA);
-
-    await this.db.read();
-    if (!this.db.data) {
-      this.db.data = DEFAULT_DATA;
-      await this.db.write();
-    }
-
-    // Migrate legacy format if needed
-    await this.migrateIfNeeded();
-
-    console.log(`[ConfigStore] LowDB initialized at ${envConfig.DB_PATH}`);
-  }
-
-  /**
-   * Detect and migrate legacy format where users stored full DashboardProfiles.
-   * Legacy format: { users: { "username": DashboardProfile } }
-   * New format: { groups: { "groupId": GroupProfile }, users: { "username": UserProfile } }
-   */
-  private async migrateIfNeeded(): Promise<void> {
-    const db = this.getDb();
-    const data = db.data as any;
-
-    // If groups key already exists, assume already migrated
-    if (data.groups && Object.keys(data.groups).length > 0) return;
-
-    // Check if users have legacy full profiles (they contain assetMapping/portalEnv)
-    const userEntries = Object.entries(data.users || {}) as [string, any][];
-    const legacyEntries = userEntries.filter(
-      ([, profile]) => profile && ('assetMapping' in profile || 'portalEnv' in profile),
-    );
-
-    if (legacyEntries.length === 0) {
-      // No legacy data or empty db — just ensure groups exists
-      if (!data.groups) {
-        data.groups = {};
-        await db.write();
-      }
-      return;
-    }
-
-    console.log(`[ConfigStore] Migrating ${legacyEntries.length} legacy user profile(s) to group-based format...`);
-
-    data.groups = data.groups || {};
-    const now = new Date().toISOString();
-
-    for (const [username, legacy] of legacyEntries) {
-      // Use a temporary group key based on a hash of the username
-      // This will be re-associated with the real portal groupId on next login
-      const tempGroupId = `legacy_${username}`;
-
-      // Extract group-level fields
-      const groupProfile: GroupProfile = {
-        id: tempGroupId,
-        name: legacy.name || 'Default',
-        portalEnv: legacy.portalEnv || 'prod',
-        assetMapping: legacy.assetMapping || {},
-        polling: legacy.polling || { intervalSeconds: 60, maxWindowHours: 3, incrementalWindowMinutes: 10, scheduleIntervalSeconds: 300 },
-        monitoringCredentials: legacy.monitoringCredentials,
-        graphQlApiKey: legacy.graphQlApiKey,
-        createdAt: legacy.createdAt || now,
-        updatedAt: legacy.updatedAt || now,
-      };
-
-      // Auto-migrate old single-GCP assetMapping format
-      if (groupProfile.assetMapping && !(groupProfile.assetMapping as any).companies && (groupProfile.assetMapping as any).uevcb) {
-        groupProfile.assetMapping = migrateAssetMapping(groupProfile.assetMapping);
-      }
-
-      data.groups[tempGroupId] = groupProfile;
-
-      // Extract user-level fields
-      const userProfile: UserProfile = {
-        id: username,
-        groupId: tempGroupId,
-        widgetLayout: legacy.widgetLayout,
-        createdAt: legacy.createdAt || now,
-        updatedAt: legacy.updatedAt || now,
-      };
-
-      data.users[username] = userProfile;
-    }
-
-    await db.write();
-    console.log(`[ConfigStore] Migration complete. ${Object.keys(data.groups).length} group(s), ${Object.keys(data.users).length} user(s).`);
-  }
-
-  private getDb() {
-    if (!this.db) {
-      throw new Error('ConfigStoreService not initialized. Call init() first.');
-    }
-    return this.db;
+    // Prisma connects lazily on first query. Nothing to do.
   }
 
   // ── Group Profile ──
 
   async loadGroupProfile(groupId: string): Promise<GroupProfile | null> {
-    const db = this.getDb();
-    await db.read();
-    return db.data.groups[groupId] ?? null;
+    const row = await prisma.groupProfile.findUnique({ where: { id: groupId } });
+    if (!row) return null;
+    return this.rowToGroupProfile(row);
   }
 
   async saveGroupProfile(groupId: string, profile: GroupProfile): Promise<void> {
-    const db = this.getDb();
-    await db.read();
-    profile.updatedAt = new Date().toISOString();
-    if (!profile.createdAt) {
-      profile.createdAt = profile.updatedAt;
+    await prisma.groupProfile.upsert({
+      where: { id: groupId },
+      update: {
+        name: profile.name,
+        portalEnv: profile.portalEnv,
+        assetMapping: profile.assetMapping as any,
+        polling: profile.polling as any,
+        monitoringCredentials: profile.monitoringCredentials as any ?? undefined,
+        graphQlApiKey: profile.graphQlApiKey ?? undefined,
+        scheduleBapEditable: profile.scheduleBapEditable ?? false,
+        defaultResolutionMinutes: profile.defaultResolutionMinutes ?? undefined,
+        customAttributeDefinitions: profile.customAttributeDefinitions as any ?? undefined,
+        portfolioMap: (profile as any).portfolioSnapshot as any ?? (profile as any).portfolioMap as any ?? undefined,
+      },
+      create: {
+        id: groupId,
+        name: profile.name || 'Default',
+        portalEnv: profile.portalEnv || 'prod',
+        assetMapping: profile.assetMapping as any || {},
+        polling: profile.polling as any || DEFAULT_POLLING,
+        monitoringCredentials: profile.monitoringCredentials as any ?? undefined,
+        graphQlApiKey: profile.graphQlApiKey ?? undefined,
+        scheduleBapEditable: profile.scheduleBapEditable ?? false,
+        defaultResolutionMinutes: profile.defaultResolutionMinutes ?? undefined,
+        customAttributeDefinitions: profile.customAttributeDefinitions as any ?? undefined,
+        portfolioMap: (profile as any).portfolioSnapshot as any ?? (profile as any).portfolioMap as any ?? undefined,
+      },
+    });
+  }
+
+  /** Load all group profiles (used by ScadaWorker). */
+  async loadAllGroupProfiles(): Promise<Record<string, GroupProfile>> {
+    const rows = await prisma.groupProfile.findMany();
+    const result: Record<string, GroupProfile> = {};
+    for (const row of rows) {
+      result[row.id] = this.rowToGroupProfile(row);
     }
-    db.data.groups[groupId] = profile;
-    await db.write();
+    return result;
   }
 
   // ── User Profile ──
 
   async loadUserProfile(username: string): Promise<UserProfile | null> {
-    const db = this.getDb();
-    await db.read();
-    return db.data.users[username] ?? null;
+    const row = await prisma.userProfile.findUnique({ where: { id: username } });
+    if (!row) return null;
+    return this.rowToUserProfile(row);
   }
 
   async saveUserProfile(username: string, profile: UserProfile): Promise<void> {
-    const db = this.getDb();
-    await db.read();
-    profile.updatedAt = new Date().toISOString();
-    if (!profile.createdAt) {
-      profile.createdAt = profile.updatedAt;
-    }
-    db.data.users[username] = profile;
-    await db.write();
+    await prisma.userProfile.upsert({
+      where: { id: username },
+      update: {
+        groupId: profile.groupId,
+        widgetLayout: profile.widgetLayout as any ?? undefined,
+      },
+      create: {
+        id: username,
+        groupId: profile.groupId,
+        widgetLayout: profile.widgetLayout as any ?? undefined,
+      },
+    });
   }
 
   // ── Merged Profile (backward-compatible) ──
 
-  /**
-   * Load a merged DashboardProfile combining group + user data.
-   * Used by routes that need the full profile view.
-   */
   async loadProfile(username: string, groupId?: string): Promise<DashboardProfile | null> {
-    const db = this.getDb();
-    await db.read();
-
-    const userProfile = db.data.users[username] as UserProfile | undefined;
-    const resolvedGroupId = groupId || userProfile?.groupId;
-
+    const userRow = await prisma.userProfile.findUnique({ where: { id: username } });
+    const resolvedGroupId = groupId || userRow?.groupId;
     if (!resolvedGroupId) return null;
 
-    const groupProfile = db.data.groups[resolvedGroupId] as GroupProfile | undefined;
-    if (!groupProfile) return null;
+    const groupRow = await prisma.groupProfile.findUnique({ where: { id: resolvedGroupId } });
+    if (!groupRow) return null;
 
-    // Merge group + user into DashboardProfile
+    const gp = this.rowToGroupProfile(groupRow);
+    const up = userRow ? this.rowToUserProfile(userRow) : null;
+
     return {
-      id: groupProfile.id,
-      name: groupProfile.name,
-      portalEnv: groupProfile.portalEnv,
-      assetMapping: groupProfile.assetMapping,
-      polling: groupProfile.polling,
-      monitoringCredentials: groupProfile.monitoringCredentials,
-      graphQlApiKey: groupProfile.graphQlApiKey,
-      scheduleBapEditable: groupProfile.scheduleBapEditable,
-      widgetLayout: userProfile?.widgetLayout,
+      id: gp.id,
+      name: gp.name,
+      portalEnv: gp.portalEnv,
+      assetMapping: gp.assetMapping,
+      polling: gp.polling,
+      monitoringCredentials: gp.monitoringCredentials,
+      graphQlApiKey: gp.graphQlApiKey,
+      scheduleBapEditable: gp.scheduleBapEditable,
+      defaultResolutionMinutes: gp.defaultResolutionMinutes,
+      customAttributeDefinitions: gp.customAttributeDefinitions,
+      portfolioSnapshot: gp.portfolioSnapshot,
+      widgetLayout: up?.widgetLayout,
       groupId: resolvedGroupId,
-      createdAt: groupProfile.createdAt,
-      updatedAt: groupProfile.updatedAt,
+      createdAt: gp.createdAt,
+      updatedAt: gp.updatedAt,
     };
   }
 
-  /**
-   * Create a timestamped backup of the current db.json before destructive writes.
-   */
-  private async backupBeforeSave(): Promise<void> {
-    try {
-      const dbPath = envConfig.DB_PATH;
-      const backupDir = path.join(path.dirname(dbPath), 'backups');
-      await fs.mkdir(backupDir, { recursive: true });
-
-      const ts = new Date().toISOString().replace(/[:.]/g, '-');
-      const backupPath = path.join(backupDir, `db-${ts}.json`);
-      await fs.copyFile(dbPath, backupPath);
-
-      // Prune old backups — keep only the most recent MAX_BACKUPS
-      const files = (await fs.readdir(backupDir))
-        .filter(f => f.startsWith('db-') && f.endsWith('.json'))
-        .sort();
-      if (files.length > MAX_BACKUPS) {
-        const toDelete = files.slice(0, files.length - MAX_BACKUPS);
-        for (const f of toDelete) {
-          await fs.unlink(path.join(backupDir, f)).catch(() => {});
-        }
-      }
-    } catch (err) {
-      console.warn('[ConfigStore] backup failed (non-fatal):', err);
-    }
-  }
-
-  /**
-   * Save a merged DashboardProfile by splitting it into group + user parts.
-   */
   async saveProfile(username: string, profile: DashboardProfile, groupId?: string, forceMapping = false): Promise<void> {
     const resolvedGroupId = groupId || profile.groupId;
     if (!resolvedGroupId) {
       throw new Error('Cannot save profile without groupId');
     }
 
-    const now = new Date().toISOString();
-
-    // Split and save group fields
+    // Guard: prevent accidental mapping deletion
     const existingGroup = await this.loadGroupProfile(resolvedGroupId);
-
-    // Guard: prevent accidental mapping deletion (bypass with forceMapping flag)
     const existingCompanyCount = existingGroup?.assetMapping?.companies?.length ?? 0;
     const incomingCompanyCount = profile.assetMapping?.companies?.length ?? 0;
     if (!forceMapping && existingCompanyCount > 0 && incomingCompanyCount === 0) {
-      throw new Error('MAPPING_DELETE_BLOCKED: Cannot clear asset mapping that has companies. Remove companies individually or use force flag.');
+      throw new Error('MAPPING_DELETE_BLOCKED: Cannot clear asset mapping that has companies.');
     }
 
-    // Auto-backup before overwriting
-    await this.backupBeforeSave();
+    // Transaction: save group + user atomically
+    await prisma.$transaction(async (tx) => {
+      await tx.groupProfile.upsert({
+        where: { id: resolvedGroupId },
+        update: {
+          name: profile.name || existingGroup?.name || 'Default',
+          portalEnv: profile.portalEnv || existingGroup?.portalEnv || 'prod',
+          assetMapping: profile.assetMapping as any || existingGroup?.assetMapping || {},
+          polling: profile.polling as any || existingGroup?.polling || DEFAULT_POLLING,
+          monitoringCredentials: profile.monitoringCredentials as any ?? existingGroup?.monitoringCredentials as any ?? undefined,
+          graphQlApiKey: profile.graphQlApiKey ?? existingGroup?.graphQlApiKey ?? undefined,
+          scheduleBapEditable: profile.scheduleBapEditable ?? existingGroup?.scheduleBapEditable ?? false,
+          defaultResolutionMinutes: profile.defaultResolutionMinutes ?? existingGroup?.defaultResolutionMinutes ?? undefined,
+          customAttributeDefinitions: profile.customAttributeDefinitions as any ?? existingGroup?.customAttributeDefinitions as any ?? undefined,
+          portfolioMap: profile.portfolioMap as any ?? existingGroup?.portfolioMap as any ?? undefined,
+        },
+        create: {
+          id: resolvedGroupId,
+          name: profile.name || 'Default',
+          portalEnv: profile.portalEnv || 'prod',
+          assetMapping: profile.assetMapping as any || {},
+          polling: profile.polling as any || DEFAULT_POLLING,
+          monitoringCredentials: profile.monitoringCredentials as any ?? undefined,
+          graphQlApiKey: profile.graphQlApiKey ?? undefined,
+          scheduleBapEditable: profile.scheduleBapEditable ?? false,
+          defaultResolutionMinutes: profile.defaultResolutionMinutes ?? undefined,
+          customAttributeDefinitions: profile.customAttributeDefinitions as any ?? undefined,
+        },
+      });
 
-    const groupProfile: GroupProfile = {
-      id: resolvedGroupId,
-      name: profile.name || existingGroup?.name || 'Default',
-      portalEnv: profile.portalEnv || existingGroup?.portalEnv || 'prod',
-      assetMapping: profile.assetMapping || existingGroup?.assetMapping || ({} as any),
-      polling: profile.polling || existingGroup?.polling || { intervalSeconds: 60, maxWindowHours: 3, incrementalWindowMinutes: 10, scheduleIntervalSeconds: 300 },
-      monitoringCredentials: profile.monitoringCredentials ?? existingGroup?.monitoringCredentials,
-      graphQlApiKey: profile.graphQlApiKey ?? existingGroup?.graphQlApiKey,
-      scheduleBapEditable: profile.scheduleBapEditable ?? existingGroup?.scheduleBapEditable,
-      createdAt: existingGroup?.createdAt || now,
-      updatedAt: now,
-    };
-    await this.saveGroupProfile(resolvedGroupId, groupProfile);
-
-    // Split and save user fields
-    const existingUser = await this.loadUserProfile(username);
-    const userProfile: UserProfile = {
-      id: username,
-      groupId: resolvedGroupId,
-      widgetLayout: profile.widgetLayout ?? existingUser?.widgetLayout,
-      createdAt: existingUser?.createdAt || now,
-      updatedAt: now,
-    };
-    await this.saveUserProfile(username, userProfile);
+      const existingUser = await tx.userProfile.findUnique({ where: { id: username } });
+      await tx.userProfile.upsert({
+        where: { id: username },
+        update: {
+          groupId: resolvedGroupId,
+          widgetLayout: profile.widgetLayout as any ?? existingUser?.widgetLayout ?? undefined,
+        },
+        create: {
+          id: username,
+          groupId: resolvedGroupId,
+          widgetLayout: profile.widgetLayout as any ?? undefined,
+        },
+      });
+    });
   }
 
-  /**
-   * Re-associate a user's legacy group profile with their real portal groupId.
-   * Called on login when we know the real groupId from the portal.
-   */
   async reassociateGroup(username: string, realGroupId: string, groupName: string): Promise<void> {
-    const db = this.getDb();
-    await db.read();
+    const userRow = await prisma.userProfile.findUnique({ where: { id: username } });
+    if (!userRow) return;
 
-    const userProfile = db.data.users[username] as UserProfile | undefined;
-    if (!userProfile) return;
-
-    const currentGroupId = userProfile.groupId;
-
-    // If already associated with the real group, nothing to do
+    const currentGroupId = userRow.groupId;
     if (currentGroupId === realGroupId) return;
 
-    // Check if a real group profile already exists (another user from this group already logged in)
-    const existingRealGroup = db.data.groups[realGroupId] as GroupProfile | undefined;
+    await prisma.$transaction(async (tx) => {
+      const existingRealGroup = await tx.groupProfile.findUnique({ where: { id: realGroupId } });
 
-    if (existingRealGroup) {
-      // Real group already exists — just point the user to it
-      userProfile.groupId = realGroupId;
-      userProfile.updatedAt = new Date().toISOString();
-      db.data.users[username] = userProfile;
+      if (existingRealGroup) {
+        // Real group exists — point user to it
+        await tx.userProfile.update({
+          where: { id: username },
+          data: { groupId: realGroupId },
+        });
 
-      // Clean up the legacy group if it was temporary
-      if (currentGroupId.startsWith('legacy_')) {
-        delete db.data.groups[currentGroupId];
+        // Clean up legacy group
+        if (currentGroupId.startsWith('legacy_')) {
+          // Only delete if no other users reference it
+          const otherUsers = await tx.userProfile.count({ where: { groupId: currentGroupId } });
+          if (otherUsers === 0) {
+            await tx.groupProfile.delete({ where: { id: currentGroupId } }).catch(() => {});
+          }
+        }
+      } else {
+        // Move legacy group to real groupId
+        const legacyGroup = await tx.groupProfile.findUnique({ where: { id: currentGroupId } });
+        if (legacyGroup) {
+          // Create new group with real ID, copy data
+          await tx.groupProfile.create({
+            data: {
+              ...legacyGroup,
+              id: realGroupId,
+              name: groupName,
+              updatedAt: new Date(),
+            },
+          });
+          // Point user to new group
+          await tx.userProfile.update({
+            where: { id: username },
+            data: { groupId: realGroupId },
+          });
+          // Delete legacy group
+          const otherUsers = await tx.userProfile.count({ where: { groupId: currentGroupId } });
+          if (otherUsers === 0) {
+            await tx.groupProfile.delete({ where: { id: currentGroupId } }).catch(() => {});
+          }
+        } else {
+          // No legacy group — just create empty real group and point user
+          await tx.groupProfile.create({
+            data: {
+              id: realGroupId,
+              name: groupName,
+              portalEnv: 'prod',
+              assetMapping: {},
+              polling: DEFAULT_POLLING,
+            },
+          });
+          await tx.userProfile.update({
+            where: { id: username },
+            data: { groupId: realGroupId },
+          });
+        }
       }
-    } else {
-      // Move the legacy group profile to the real groupId
-      const legacyGroup = db.data.groups[currentGroupId] as GroupProfile | undefined;
-      if (legacyGroup) {
-        legacyGroup.id = realGroupId;
-        legacyGroup.name = groupName;
-        db.data.groups[realGroupId] = legacyGroup;
-        delete db.data.groups[currentGroupId];
-      }
+    });
 
-      userProfile.groupId = realGroupId;
-      userProfile.updatedAt = new Date().toISOString();
-      db.data.users[username] = userProfile;
-    }
-
-    await db.write();
     console.log(`[ConfigStore] Reassociated ${username}: ${currentGroupId} → ${realGroupId} (${groupName})`);
   }
 
   async deleteProfile(username: string): Promise<void> {
-    const db = this.getDb();
-    await db.read();
-    delete db.data.users[username];
-    await db.write();
+    await prisma.userProfile.delete({ where: { id: username } }).catch(() => {});
+  }
+
+  // ── Private helpers ──
+
+  private rowToGroupProfile(row: any): GroupProfile {
+    return {
+      id: row.id,
+      name: row.name,
+      portalEnv: row.portalEnv as GroupProfile['portalEnv'],
+      assetMapping: row.assetMapping as any,
+      polling: row.polling as any,
+      monitoringCredentials: row.monitoringCredentials as any ?? undefined,
+      graphQlApiKey: row.graphQlApiKey ?? undefined,
+      scheduleBapEditable: row.scheduleBapEditable ?? undefined,
+      defaultResolutionMinutes: row.defaultResolutionMinutes ?? undefined,
+      customAttributeDefinitions: row.customAttributeDefinitions as any ?? undefined,
+      portfolioSnapshot: row.portfolioMap as any ?? undefined,
+      createdAt: row.createdAt?.toISOString?.() ?? row.createdAt,
+      updatedAt: row.updatedAt?.toISOString?.() ?? row.updatedAt,
+    };
+  }
+
+  private rowToUserProfile(row: any): UserProfile {
+    return {
+      id: row.id,
+      groupId: row.groupId,
+      widgetLayout: row.widgetLayout as any ?? undefined,
+      createdAt: row.createdAt?.toISOString?.() ?? row.createdAt,
+      updatedAt: row.updatedAt?.toISOString?.() ?? row.updatedAt,
+    };
   }
 }
