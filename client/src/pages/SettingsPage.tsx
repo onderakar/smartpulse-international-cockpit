@@ -4,6 +4,8 @@ import { MonitoringCredentialsForm } from '../components/settings/MonitoringCred
 import { GQLTestConfig } from '../components/settings/GQLTestConfig';
 import { CacheManagement } from '../components/settings/CacheManagement';
 import { PollingConfigForm } from '../components/settings/PollingConfigForm';
+import { AttributeDefinitionsForm } from '../components/settings/AttributeDefinitionsForm';
+import { PortfolioViewer } from '../components/settings/PortfolioViewer';
 import { useLocale } from '../context/LocaleContext';
 import { useProfile } from '../context/ProfileContext';
 import { DashboardProfile } from '@shared/types/dashboard.types';
@@ -92,6 +94,8 @@ export function SettingsPage() {
       <h2 className="text-xl font-bold text-white mb-6">{t('settings.title')}</h2>
       <div className="space-y-6">
         <AssetMappingForm />
+        <AttributeDefinitionsForm />
+        <PortfolioViewer />
         <MonitoringCredentialsForm />
         <GQLTestConfig />
         <CacheManagement />

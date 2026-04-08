@@ -1,5 +1,7 @@
 import { AssetMapping } from './assetMapping.types';
 import { MTUResolution } from './plant.types';
+import { AttributeDefinition } from './attributes.types';
+import { PortfolioSnapshot } from './portfolio.types';
 
 export interface PollingConfig {
   intervalSeconds: number;
@@ -36,6 +38,10 @@ export interface GroupProfile {
   scheduleBapEditable?: boolean;
   /** Sistem geneli varsayılan zaman çözünürlüğü. GCP override yoksa bu değer kullanılır. Default: 15 */
   defaultResolutionMinutes?: MTUResolution;
+  /** Admin-defined attribute definitions (beyond system seed) */
+  customAttributeDefinitions?: AttributeDefinition[];
+  /** Portfolio mapping fetched from SmartPulse Portal (portfolioNo → data) */
+  portfolioSnapshot?: PortfolioSnapshot;
   createdAt: string;
   updatedAt: string;
 }
@@ -63,6 +69,8 @@ export interface DashboardProfile {
   graphQlApiKey?: string;
   scheduleBapEditable?: boolean;
   defaultResolutionMinutes?: MTUResolution;
+  customAttributeDefinitions?: AttributeDefinition[];
+  portfolioSnapshot?: PortfolioSnapshot;
   widgetLayout?: WidgetLayoutItem[];
   groupId?: string;
   createdAt: string;

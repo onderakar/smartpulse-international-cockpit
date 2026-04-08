@@ -7,9 +7,12 @@ export * from './types/dashboard.types';
 export * from './types/monitoring.types';
 export * from './types/schedule.types';
 export * from './types/forecast.types';
+export * from './types/attributes.types';
+export * from './types/portfolio.types';
 
 // Constants
 export * from './constants/defaults'
+export { ATTRIBUTE_DEFINITIONS, getDefinitionsForScope, mergeDefinitions } from './constants/attributeDefinitions'
 
 // Utils
 export { sumForecastSeries } from './utils/forecastAggregation';
