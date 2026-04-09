@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useProfile } from '../context/ProfileContext';
-import { ftpApi } from '../api/ftp.api';
+import { useFileSource } from '../hooks/useFileSource';
 import { MultiBatteryTechParams } from '@shared/types/techParams.types';
 import { useLocale } from '../context/LocaleContext';
 
@@ -10,45 +10,36 @@ export function BatteryParamsPage() {
   const mapping = profile?.assetMapping ?? null;
   const { t } = useLocale();
 
-  const [multiParams, setMultiParams] = useState<MultiBatteryTechParams | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const ftpDirection = mapping?.ftpDirection ?? 'incoming';
-  const ftpFilename = mapping?.ftpFilename ?? 'Technical_Parameters.csv';
-
-  const loadParams = useCallback(async () => {
-    if (!mapping) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await ftpApi.readMultiTechParams(ftpDirection, ftpFilename);
-      setMultiParams(result.parsed);
-    } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || t('batteryParams.loadFailed');
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, [mapping, ftpDirection, ftpFilename, t]);
-
-  useEffect(() => {
-    loadParams();
-  }, [loadParams]);
+  const {
+    parsed: multiParams,
+    loading,
+    refreshing,
+    error,
+    versionNo,
+    fetchedAt,
+    refresh,
+    forceReadAndSync,
+  } = useFileSource<MultiBatteryTechParams>('technical-parameters', { autoRefresh: true });
 
   const handleSyncAttributes = useCallback(async () => {
-    if (!mapping) return;
-    setSyncing(true);
     try {
-      const result = await ftpApi.syncAttributes(ftpDirection, ftpFilename);
-      toast.success(t('batteryParams.attrSynced', { gcps: String(result.gcpsUpdated), comps: String(result.componentsUpdated) }));
+      const result = await forceReadAndSync();
+      if (result?.sync) {
+        toast.success(t('batteryParams.attrSynced', {
+          gcps: String(result.sync.gcpsUpdated),
+          comps: String(result.sync.componentsUpdated),
+        }));
+      } else {
+        toast.success('Refreshed from FTP');
+      }
     } catch (err: any) {
-      toast.error(err.response?.data?.message || err.message || 'Sync failed');
-    } finally {
-      setSyncing(false);
+      toast.error(err?.response?.data?.message || err.message || 'Sync failed');
     }
-  }, [mapping, ftpDirection, ftpFilename, t]);
+  }, [forceReadAndSync, t]);
+
+  const handleRefresh = useCallback(async () => {
+    await refresh();
+  }, [refresh]);
 
   // Column letters (A, B, C, ...) for Excel-style header
   const colLetters = useMemo(() => {
@@ -82,26 +73,34 @@ export function BatteryParamsPage() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 bg-[#1e1e34] border border-[#2d2d4a] rounded-md px-3 py-1.5">
             <i className="ri-file-excel-2-line text-emerald-400 text-sm" />
-            <span className="text-xs text-gray-300 font-medium">{ftpFilename}</span>
+            <span className="text-xs text-gray-300 font-medium">technical-parameters</span>
           </div>
           {multiParams && (
             <span className="text-[10px] text-gray-500">
               {multiParams.plantIds.length} {t('batteryParams.batteries')} &times; {multiParams.variableOrder.length} {t('batteryParams.variables')}
             </span>
           )}
+          {versionNo != null && (
+            <span className="text-[10px] text-gray-600">
+              v#{versionNo} {fetchedAt ? new Date(fetchedAt).toLocaleTimeString() : ''}
+            </span>
+          )}
+          {refreshing && (
+            <span className="text-[10px] text-primary-400 animate-pulse">FTP syncing...</span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={handleSyncAttributes}
-            disabled={syncing || !multiParams}
+            disabled={refreshing || !multiParams}
             className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-900/20 border border-emerald-800/40 rounded-md px-3 py-1.5 transition-colors disabled:opacity-40"
           >
             <i className="ri-database-2-line text-sm" />
-            {syncing ? t('common.saving') : t('batteryParams.syncAttributes')}
+            {refreshing ? t('common.saving') : t('batteryParams.syncAttributes')}
           </button>
           <button
-            onClick={loadParams}
-            disabled={loading}
+            onClick={handleRefresh}
+            disabled={loading || refreshing}
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-[#1e1e34] border border-[#2d2d4a] rounded-md px-3 py-1.5 transition-colors disabled:opacity-40"
           >
             <i className="ri-refresh-line text-sm" />
@@ -114,7 +113,7 @@ export function BatteryParamsPage() {
       {error && (
         <div className="bg-orange-900/20 border border-orange-800/40 rounded-md px-4 py-2.5 mb-3 flex items-center justify-between shrink-0">
           <span className="text-orange-300 text-xs">{error}</span>
-          <button onClick={loadParams} className="text-orange-400 hover:text-orange-300 text-xs underline ml-4">{t('common.retry')}</button>
+          <button onClick={handleRefresh} className="text-orange-400 hover:text-orange-300 text-xs underline ml-4">{t('common.retry')}</button>
         </div>
       )}
 
@@ -134,7 +133,6 @@ export function BatteryParamsPage() {
           <table className="w-full border-collapse" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif", fontSize: '11px' }}>
             {/* Column letter row (A, B, C...) */}
             <thead className="sticky top-0 z-20">
-              {/* Letter row */}
               <tr>
                 <th className="sticky left-0 z-30 bg-[#191930] border-b border-r border-[#2d2d4a] w-[40px] min-w-[40px]" />
                 <th className="sticky left-[40px] z-30 bg-[#191930] border-b border-r border-[#2d2d4a] min-w-[240px]" />

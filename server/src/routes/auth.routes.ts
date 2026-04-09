@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { PortalAuthService } from '../services/portalAuth.service';
 import { ConfigStoreService } from '../services/configStore.service';
+import { cacheGroupSession } from '../store/groupSessionCache';
 
 export function createAuthRoutes(
   portalAuth: PortalAuthService,
@@ -43,6 +44,9 @@ export function createAuthRoutes(
         env,
         loginTimestamp: Date.now(),
       };
+
+      // Cache session for background workers (FileIngestionWorker, etc.)
+      cacheGroupSession(groupIdStr, { portalCookies: result.cookies, env, username });
 
       // Re-associate legacy group profile with real portal groupId
       if (groupId) {

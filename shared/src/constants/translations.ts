@@ -537,6 +537,20 @@ const T = {
   'portfolio.noData':              { tr: 'Portföy verisi yok. SmartPulse Portaldan çekmek için butona tıklayın.', en: 'No portfolio data. Click to fetch from SmartPulse Portal.' },
   'portfolio.lastFetched':         { tr: 'Son güncelleme', en: 'Last fetched' },
   'portfolio.unmatched':           { tr: 'Eşleşme bulunamadı', en: 'Unmatched' },
+
+  // ==================== File Ingestion ====================
+  'fileIngestion.title':           { tr: 'Dosya Veri Kaynakları', en: 'File Data Sources' },
+  'fileIngestion.addSource':       { tr: 'Kaynak Ekle', en: 'Add Source' },
+  'fileIngestion.test':            { tr: 'Test', en: 'Test' },
+  'fileIngestion.readNow':         { tr: 'Şimdi Oku', en: 'Read Now' },
+  'fileIngestion.noSources':       { tr: 'Dosya kaynağı tanımlanmamış.', en: 'No file sources configured.' },
+  'fileIngestion.direction':       { tr: 'Yön', en: 'Direction' },
+  'fileIngestion.interval':        { tr: 'Periyot (dk)', en: 'Interval (min)' },
+  'fileIngestion.lastRead':        { tr: 'Son Okuma', en: 'Last Read' },
+  'fileIngestion.version':         { tr: 'Versiyon', en: 'Version' },
+  'fileIngestion.saveBack':        { tr: 'FTP\'ye Geri Kaydet', en: 'Save Back to FTP' },
+  'fileIngestion.savedBack':       { tr: 'FTP\'ye kaydedildi', en: 'Saved back to FTP' },
+  'fileIngestion.preview':         { tr: 'Dosya Önizleme', en: 'File Preview' },
 } as const;
 
 export type TranslationKey = keyof typeof T;

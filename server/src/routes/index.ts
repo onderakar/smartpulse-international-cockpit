@@ -4,6 +4,9 @@ import { createAutoMappingRoutes } from './autoMapping.routes';
 import { createFtpRoutes } from './ftp.routes';
 import { createMonitoringRoutes } from './monitoring.routes';
 import { createPortfolioRoutes } from './portfolio.routes';
+import { createFileRoutes } from './file.routes';
+import { FileStoreService } from '../services/fileStore.service';
+import { FileIngestionWorker } from '../workers/fileIngestion.worker';
 import { createConfigRoutes } from './config.routes';
 import { createScheduleRoutes } from './schedule.routes';
 import { createForecastRoutes } from './forecast.routes';
@@ -38,6 +41,10 @@ export async function createRoutes(): Promise<Router> {
   router.use('/auto-mapping', createAutoMappingRoutes(ftpService, configStore));
   router.use('/monitoring', createMonitoringRoutes(monitoringAuth, monitoringService));
   router.use('/portfolio', createPortfolioRoutes(configStore));
+
+  const fileStore = new FileStoreService();
+  const fileIngestionWorker = new FileIngestionWorker(fileStore, ftpService, configStore);
+  router.use('/files', createFileRoutes(fileStore, fileIngestionWorker, ftpService, configStore));
 
   return router;
 }

@@ -6,6 +6,7 @@ import { CacheManagement } from '../components/settings/CacheManagement';
 import { PollingConfigForm } from '../components/settings/PollingConfigForm';
 import { AttributeDefinitionsForm } from '../components/settings/AttributeDefinitionsForm';
 import { PortfolioViewer } from '../components/settings/PortfolioViewer';
+import { FileSourcesManager } from '../components/settings/FileSourcesManager';
 import { useLocale } from '../context/LocaleContext';
 import { useProfile } from '../context/ProfileContext';
 import { DashboardProfile } from '@shared/types/dashboard.types';
@@ -95,6 +96,7 @@ export function SettingsPage() {
       <div className="space-y-6">
         <AssetMappingForm />
         <AttributeDefinitionsForm />
+        <FileSourcesManager />
         <PortfolioViewer />
         <MonitoringCredentialsForm />
         <GQLTestConfig />

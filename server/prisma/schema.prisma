@@ -109,3 +109,45 @@ model ScheduleRevision {
   @@unique([gcpId, dateKey, deliveryStart, contentHash])
   @@index([gcpId, dateKey])
 }
+
+// ── File Ingestion ──
+
+model FileSource {
+  id              Int           @id @default(autoincrement())
+  key             String                            // "technical-parameters", "dam-gen"
+  displayName     String                            // "Technical Parameters"
+  filename        String                            // "Technical_Parameters.csv"
+  direction       String        @default("incoming") // "incoming" | "outgoing"
+  fileType        String?                           // "csv" | "json" | "xml" | null = auto-detect
+  intervalMinutes Int           @default(10)
+  enabled         Boolean       @default(true)
+  parserKey       String?                           // domain-specific parser key
+  groupId         String
+
+  lastCheckedAt   DateTime?
+  lastError       String?
+
+  versions        FileVersion[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([groupId, key])
+  @@index([groupId, enabled])
+}
+
+model FileVersion {
+  id          Int        @id @default(autoincrement())
+  sourceId    Int
+  versionNo   Int
+  rawContent  String
+  contentHash String
+  sizeBytes   Int
+  isCurrent   Boolean    @default(false)
+  fetchedAt   DateTime   @default(now())
+
+  source      FileSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, contentHash])
+  @@index([sourceId, isCurrent])
+  @@index([sourceId, fetchedAt(sort: Desc)])
+}

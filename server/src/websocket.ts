@@ -30,6 +30,15 @@ export function setupWebSocket(server: HttpServer) {
             console.log(`[WebSocket] ${socket.id} subscribed to market:global`);
         });
 
+        socket.on('subscribe:files', (groupId: string) => {
+            socket.join(`files:${groupId}`);
+            console.log(`[WebSocket] ${socket.id} subscribed to files:${groupId}`);
+        });
+
+        socket.on('unsubscribe:files', (groupId: string) => {
+            socket.leave(`files:${groupId}`);
+        });
+
         socket.on('disconnect', () => {
             console.log(`[WebSocket] Client disconnected: ${socket.id}`);
         });
@@ -44,6 +53,10 @@ export function setupWebSocket(server: HttpServer) {
     eventBus.on(EVENTS.MARKET_INGESTED, (metrics: any[]) => {
         // Broadcast to market listeners
         io.to('market:global').emit('live_market', metrics);
+    });
+
+    eventBus.on(EVENTS.FILE_UPDATED, (payload: { groupId: string; sourceKey: string; versionId: number; versionNo: number }) => {
+        io.to(`files:${payload.groupId}`).emit('file:updated', payload);
     });
 
     return io;

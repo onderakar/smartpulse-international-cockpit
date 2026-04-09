@@ -3,6 +3,7 @@ import { envConfig } from './config/env';
 
 import { FileWatcherWorker } from './workers/fileWatcher.worker';
 import { ScadaWorker } from './workers/scada.worker';
+import { FileIngestionWorker } from './workers/fileIngestion.worker';
 import { setupWebSocket } from './websocket';
 
 async function main() {
@@ -27,6 +28,9 @@ async function main() {
 
   const scadaWorker = new ScadaWorker(envConfig.SCADA_POLL_INTERVAL_MS);
   scadaWorker.start().catch(err => console.error('[ScadaWorker] Failed to start:', err));
+
+  const fileIngestionWorker = new FileIngestionWorker();
+  fileIngestionWorker.start().catch(err => console.error('[FileIngestionWorker] Failed to start:', err));
 
   console.log('  Workers:     [STARTING]');
 }
