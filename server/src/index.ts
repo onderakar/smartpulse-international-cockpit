@@ -4,6 +4,7 @@ import { envConfig } from './config/env';
 import { FileWatcherWorker } from './workers/fileWatcher.worker';
 import { ScadaWorker } from './workers/scada.worker';
 import { FileIngestionWorker } from './workers/fileIngestion.worker';
+import { registerFileIngestionHooks } from './adapters/fileIngestionHooks';
 import { setupWebSocket } from './websocket';
 
 async function main() {
@@ -21,6 +22,9 @@ async function main() {
 
   // Attach Socket.io
   setupWebSocket(server);
+
+  // Register post-ingestion hooks (DAM_GEN → EntityTimeSeries, etc.)
+  registerFileIngestionHooks();
 
   // Initialize workers in background
   const fileWatcher = new FileWatcherWorker();

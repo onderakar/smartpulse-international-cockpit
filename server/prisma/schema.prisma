@@ -170,3 +170,22 @@ model PortfolioMapping {
   @@unique([groupId, portfolioType, companyId])
   @@index([groupId, portfolioType])
 }
+
+// ── Entity Time Series (generic versioned series for any entity) ──
+
+model EntityTimeSeries {
+  id             Int      @id @default(autoincrement())
+  groupId        String
+  entityType     String                  // "COMPANY" | "GCP" | "COMPONENT" | "PORTFOLIO"
+  entityId       String                  // companyId, gcpId, componentId, portfolioId
+  seriesKey      String                  // "dam_trade_volume" | "generation_forecast" | "idm_net_position" | ...
+  deliveryStart  DateTime                // which MTU slot this value belongs to
+  observedAt     DateTime @default(now()) // when this value was recorded
+  value          Float
+  source         String                  // "dam-gen-csv" | "portal-api" | "scada" | "manual"
+  isFinal        Boolean  @default(true) // true = latest known value for this (entity, series, delivery)
+
+  @@index([groupId, entityType, entityId, seriesKey, isFinal])              // "current values" query
+  @@index([groupId, entityType, entityId, seriesKey, deliveryStart])        // history for a specific slot
+  @@index([deliveryStart])                                                   // date range queries
+}
