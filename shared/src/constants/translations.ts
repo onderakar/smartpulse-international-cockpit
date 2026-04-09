@@ -562,6 +562,7 @@ const T = {
   'damPortfolio.noPortfolios':     { tr: 'DAM_GEN.csv içinde portföy bulunamadı.', en: 'No portfolios found in DAM_GEN.csv.' },
   'damPortfolio.notInCsv':         { tr: 'CSV\'de yok', en: 'Not in CSV' },
   'damPortfolio.refreshed':        { tr: 'DAM verileri güncellendi', en: 'DAM data refreshed' },
+  'damPortfolio.typeOrSelect':     { tr: 'Yazın veya seçin...', en: 'Type or select...' },
 } as const;
 
 export type TranslationKey = keyof typeof T;

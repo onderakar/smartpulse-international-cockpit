@@ -1,22 +1,33 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocale } from '../../context/LocaleContext';
 import { useProfile } from '../../context/ProfileContext';
 import { portfolioMappingApi, PortfolioMappingDto } from '../../api/portfolioMapping.api';
-import { fileApi } from '../../api/file.api';
 import toast from 'react-hot-toast';
+
+/**
+ * DAM & IDM Portfolio Management
+ *
+ * Layout: Left = SmartPulse Company, Right = Portfolio IDs (tag input with suggestions + manual entry)
+ * Data model: company → portfolioId (1:1 per portfolio type, but UI supports free text entry)
+ */
+
+interface CompanyRow {
+  companyId: number;
+  companyName: string;
+  portfolioId: string | null;  // currently assigned portfolio ID
+}
 
 export function DamPortfolioManager() {
   const { t } = useLocale();
   const { profile } = useProfile();
 
-  const [damPortfolios, setDamPortfolios] = useState<string[]>([]);
-  const [mappings, setMappings] = useState<Map<string, number | null>>(new Map());
+  const [csvPortfolios, setCsvPortfolios] = useState<string[]>([]);
+  const [rows, setRows] = useState<CompanyRow[]>([]);
   const [savedMappings, setSavedMappings] = useState<PortfolioMappingDto[]>([]);
   const [sourceVersion, setSourceVersion] = useState<{ versionNo: number; fetchedAt: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [noSource, setNoSource] = useState(false);
 
   const companies = useMemo(() => profile?.assetMapping?.companies ?? [], [profile]);
 
@@ -28,73 +39,54 @@ export function DamPortfolioManager() {
         portfolioMappingApi.getDamPortfolios(),
       ]);
 
-      if (portfolioRes.portfolios.length === 0 && portfolioRes.message?.includes('No dam-gen')) {
-        setNoSource(true);
-      } else {
-        setNoSource(false);
-      }
-
-      setSavedMappings(mappingRes.mappings.filter(m => m.portfolioType === 'DAM'));
+      const damMappings = mappingRes.mappings.filter(m => m.portfolioType === 'DAM');
+      setSavedMappings(damMappings);
+      setCsvPortfolios(portfolioRes.portfolios);
       setSourceVersion(portfolioRes.sourceVersion);
 
-      // Merge: all CSV portfolios + any mapped portfolios not in CSV
-      const allPortfolioIds = new Set([
-        ...portfolioRes.portfolios,
-        ...mappingRes.mappings.filter(m => m.portfolioType === 'DAM').map(m => m.externalId),
-      ]);
+      // Build rows: one per company from AssetMapping
+      const mappingByCompany = new Map(damMappings.map(m => [m.companyId, m.externalId]));
+      const companyRows: CompanyRow[] = companies.map(c => ({
+        companyId: c.companyId,
+        companyName: c.companyName || c.fullName || `Company ${c.companyId}`,
+        portfolioId: mappingByCompany.get(c.companyId) ?? null,
+      }));
 
-      setDamPortfolios([...allPortfolioIds].sort());
-
-      // Build mapping state
-      const map = new Map<string, number | null>();
-      for (const p of allPortfolioIds) map.set(p, null);
-      for (const m of mappingRes.mappings) {
-        if (m.portfolioType === 'DAM') map.set(m.externalId, m.companyId);
-      }
-      setMappings(map);
+      setRows(companyRows);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to load portfolio data');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [companies]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Set of company IDs already assigned — used to hide from other dropdowns
-  const assignedCompanyIds = useMemo(() => {
-    const set = new Set<number>();
-    for (const companyId of mappings.values()) {
-      if (companyId !== null) set.add(companyId);
+  // Portfolio IDs already assigned to other companies
+  const assignedPortfolioIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of rows) {
+      if (r.portfolioId) set.add(r.portfolioId);
     }
     return set;
-  }, [mappings]);
+  }, [rows]);
 
-  // CSV'de olmayan ama mapping'i olan portfolio'lar
-  const csvPortfolioSet = useMemo(() => {
-    // sourceVersion null ise CSV okunamamış demek — uyarı gösterme
-    if (!sourceVersion) return new Set<string>();
-    return new Set(damPortfolios);
-  }, [damPortfolios, sourceVersion]);
-
-  const handleCompanyChange = (portfolioId: string, companyId: number | null) => {
-    setMappings(prev => {
-      const next = new Map(prev);
-      next.set(portfolioId, companyId);
-      return next;
-    });
+  const handlePortfolioChange = (companyId: number, portfolioId: string | null) => {
+    setRows(prev => prev.map(r =>
+      r.companyId === companyId ? { ...r, portfolioId } : r
+    ));
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const toSave = [...mappings.entries()]
-        .filter(([_, companyId]) => companyId !== null)
-        .map(([externalId, companyId]) => ({ externalId, companyId: companyId! }));
+      const toSave = rows
+        .filter(r => r.portfolioId)
+        .map(r => ({ externalId: r.portfolioId!, companyId: r.companyId }));
 
       const result = await portfolioMappingApi.saveMappings('DAM', toSave);
       toast.success(`${result.saved} mapping(s) saved`);
-      await loadData(); // reload to sync state
+      await loadData();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Save failed');
     } finally {
@@ -105,33 +97,26 @@ export function DamPortfolioManager() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await fileApi.forceRead('dam-gen');
       await loadData();
       toast.success(t('damPortfolio.refreshed'));
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Refresh failed');
+    } catch {
+      toast.error('Refresh failed');
     } finally {
       setRefreshing(false);
     }
   };
 
-  // Check if there are unsaved changes
+  // Unsaved changes detection
   const hasChanges = useMemo(() => {
-    const savedMap = new Map(savedMappings.map(m => [m.externalId, m.companyId]));
-    for (const [extId, companyId] of mappings) {
-      const savedCompany = savedMap.get(extId) ?? null;
-      if (companyId !== savedCompany) return true;
-    }
-    // Check removed mappings
-    for (const m of savedMappings) {
-      if (!mappings.has(m.externalId) || mappings.get(m.externalId) === null) {
-        if (savedMap.has(m.externalId)) return true;
-      }
+    const savedByCompany = new Map(savedMappings.map(m => [m.companyId, m.externalId]));
+    for (const r of rows) {
+      const saved = savedByCompany.get(r.companyId) ?? null;
+      if (r.portfolioId !== saved) return true;
     }
     return false;
-  }, [mappings, savedMappings]);
+  }, [rows, savedMappings]);
 
-  const unmappedCount = [...mappings.values()].filter(v => v === null).length;
+  const mappedCount = rows.filter(r => r.portfolioId).length;
 
   return (
     <div className="bg-[#1c1c28] border border-[#2a2a3e] rounded-lg p-5">
@@ -145,38 +130,27 @@ export function DamPortfolioManager() {
           {sourceVersion && (
             <p className="text-[10px] text-gray-500 mt-0.5">
               DAM_GEN.csv v#{sourceVersion.versionNo} · {new Date(sourceVersion.fetchedAt).toLocaleString()}
+              {csvPortfolios.length > 0 && ` · ${csvPortfolios.length} portfolio(s) in CSV`}
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="flex items-center gap-1 text-xs text-gray-400 hover:text-white bg-[#12121c] border border-[#2a2a3e] rounded-md px-3 py-1.5 transition-colors disabled:opacity-40"
-          >
-            <i className={`ri-refresh-line text-sm ${refreshing ? 'animate-spin' : ''}`} />
-            {t('common.refresh')}
-          </button>
-        </div>
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="flex items-center gap-1 text-xs text-gray-400 hover:text-white bg-[#12121c] border border-[#2a2a3e] rounded-md px-3 py-1.5 transition-colors disabled:opacity-40"
+        >
+          <i className={`ri-refresh-line text-sm ${refreshing ? 'animate-spin' : ''}`} />
+          {t('common.refresh')}
+        </button>
       </div>
 
-      {/* No source warning */}
-      {noSource && (
-        <div className="bg-amber-900/15 border border-amber-800/30 rounded-md px-4 py-3 mb-4">
-          <p className="text-amber-300/80 text-xs flex items-center gap-2">
-            <i className="ri-error-warning-line" />
-            {t('damPortfolio.noSource')}
-          </p>
-        </div>
-      )}
-
-      {/* Loading */}
+      {/* Content */}
       {loading ? (
         <div className="text-center py-8">
           <div className="inline-block w-5 h-5 border-2 border-gray-600 border-t-primary-400 rounded-full animate-spin" />
         </div>
-      ) : damPortfolios.length === 0 ? (
-        <p className="text-gray-500 text-xs text-center py-6">{t('damPortfolio.noPortfolios')}</p>
+      ) : companies.length === 0 ? (
+        <p className="text-gray-500 text-xs text-center py-6">{t('common.configureMapping')}</p>
       ) : (
         <>
           {/* Mapping table */}
@@ -184,84 +158,47 @@ export function DamPortfolioManager() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-[#191930]">
+                  <th className="text-left px-4 py-2.5 text-gray-400 font-semibold w-1/3">{t('damPortfolio.company')}</th>
                   <th className="text-left px-4 py-2.5 text-gray-400 font-semibold">{t('damPortfolio.portfolioId')}</th>
-                  <th className="text-left px-4 py-2.5 text-gray-400 font-semibold">{t('damPortfolio.company')}</th>
-                  <th className="text-center px-4 py-2.5 text-gray-400 font-semibold w-24">{t('damPortfolio.status')}</th>
+                  <th className="text-center px-4 py-2.5 text-gray-400 font-semibold w-20">{t('damPortfolio.status')}</th>
                 </tr>
               </thead>
               <tbody>
-                {damPortfolios.map(portfolioId => {
-                  const selectedCompanyId = mappings.get(portfolioId) ?? null;
-                  const isMapped = selectedCompanyId !== null;
-                  const notInCsv = sourceVersion && !csvPortfolioSet.has(portfolioId);
-
-                  // Available companies: not assigned to other portfolios
-                  const availableCompanies = companies.filter(c => {
-                    if (c.companyId === selectedCompanyId) return true; // keep current selection
-                    return !assignedCompanyIds.has(c.companyId);
-                  });
-
-                  return (
-                    <tr key={portfolioId} className="border-t border-[#2a2a3e] hover:bg-[#1e1e42]/30 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-white font-mono font-medium">{portfolioId}</span>
-                          {notInCsv && (
-                            <span className="text-[9px] text-amber-400/70 bg-amber-900/20 px-1.5 py-0.5 rounded">
-                              {t('damPortfolio.notInCsv')}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <select
-                          value={selectedCompanyId ?? ''}
-                          onChange={e => {
-                            const val = e.target.value;
-                            handleCompanyChange(portfolioId, val ? parseInt(val) : null);
-                          }}
-                          className={`w-full bg-[#12121c] border rounded px-2.5 py-1.5 text-xs transition-colors ${
-                            isMapped
-                              ? 'border-emerald-800/40 text-white'
-                              : 'border-[#2a2a3e] text-gray-500'
-                          }`}
-                        >
-                          <option value="">{t('damPortfolio.selectCompany')}</option>
-                          {availableCompanies.map(c => (
-                            <option key={c.companyId} value={c.companyId}>
-                              {c.companyName || c.fullName || `Company ${c.companyId}`}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {isMapped ? (
-                          <span className="text-emerald-400 text-[10px] flex items-center justify-center gap-1">
-                            <i className="ri-check-line" /> Mapped
-                          </span>
-                        ) : (
-                          <span className="text-amber-400/60 text-[10px] flex items-center justify-center gap-1">
-                            <i className="ri-alert-line" /> Unmapped
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {rows.map(row => (
+                  <tr key={row.companyId} className="border-t border-[#2a2a3e] hover:bg-[#1e1e42]/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <span className="text-white font-medium">{row.companyName}</span>
+                      <span className="text-[10px] text-gray-600 ml-2">#{row.companyId}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <PortfolioInput
+                        value={row.portfolioId}
+                        onChange={val => handlePortfolioChange(row.companyId, val)}
+                        suggestions={csvPortfolios}
+                        assignedIds={assignedPortfolioIds}
+                        currentValue={row.portfolioId}
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {row.portfolioId ? (
+                        <span className="text-emerald-400 text-[10px] flex items-center justify-center gap-1">
+                          <i className="ri-check-line" /> Mapped
+                        </span>
+                      ) : (
+                        <span className="text-gray-600 text-[10px]">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
 
           {/* Footer */}
           <div className="flex items-center justify-between mt-4">
-            <div className="text-[10px] text-gray-500">
-              {unmappedCount > 0 && (
-                <span className="text-amber-400/60">
-                  <i className="ri-alert-line mr-1" />
-                  {unmappedCount} unmapped portfolio{unmappedCount > 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
+            <span className="text-[10px] text-gray-500">
+              {mappedCount}/{rows.length} companies mapped
+            </span>
             <button
               onClick={handleSave}
               disabled={saving || !hasChanges}
@@ -273,6 +210,161 @@ export function DamPortfolioManager() {
             </button>
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+// ── Portfolio Input: combo of text input + dropdown suggestions ──
+
+interface PortfolioInputProps {
+  value: string | null;
+  onChange: (val: string | null) => void;
+  suggestions: string[];
+  assignedIds: Set<string>;
+  currentValue: string | null;
+}
+
+function PortfolioInput({ value, onChange, suggestions, assignedIds, currentValue }: PortfolioInputProps) {
+  const { t } = useLocale();
+  const [inputText, setInputText] = useState(value ?? '');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Sync external value
+  useEffect(() => { setInputText(value ?? ''); }, [value]);
+
+  // Available suggestions: not assigned to other companies
+  const availableSuggestions = useMemo(() => {
+    return suggestions.filter(s => {
+      if (s === currentValue) return true; // show own current assignment
+      return !assignedIds.has(s);
+    });
+  }, [suggestions, assignedIds, currentValue]);
+
+  // Filtered by input text
+  const filtered = useMemo(() => {
+    if (!inputText.trim()) return availableSuggestions;
+    const q = inputText.toLowerCase();
+    return availableSuggestions.filter(s => s.toLowerCase().includes(q));
+  }, [availableSuggestions, inputText]);
+
+  const handleSelect = (portfolioId: string) => {
+    setInputText(portfolioId);
+    onChange(portfolioId);
+    setShowDropdown(false);
+  };
+
+  const handleInputBlur = () => {
+    // Delay to allow click on dropdown item
+    setTimeout(() => {
+      setFocused(false);
+      setShowDropdown(false);
+      // Commit typed value
+      const trimmed = inputText.trim();
+      if (trimmed) {
+        onChange(trimmed);
+      } else {
+        onChange(null);
+        setInputText('');
+      }
+    }, 200);
+  };
+
+  const handleClear = () => {
+    setInputText('');
+    onChange(null);
+    inputRef.current?.focus();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      const trimmed = inputText.trim();
+      if (trimmed) {
+        onChange(trimmed);
+        setShowDropdown(false);
+        inputRef.current?.blur();
+      }
+    }
+    if (e.key === 'Escape') {
+      setShowDropdown(false);
+      inputRef.current?.blur();
+    }
+  };
+
+  const isFromCsv = value && suggestions.includes(value);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <div className="flex items-center gap-1">
+        <div className="relative flex-1">
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputText}
+            onChange={e => {
+              setInputText(e.target.value);
+              setShowDropdown(true);
+            }}
+            onFocus={() => { setFocused(true); setShowDropdown(true); }}
+            onBlur={handleInputBlur}
+            onKeyDown={handleKeyDown}
+            placeholder={t('damPortfolio.typeOrSelect')}
+            className={`w-full bg-[#12121c] border rounded px-2.5 py-1.5 text-xs pr-14 transition-colors ${
+              value
+                ? 'border-emerald-800/40 text-white'
+                : focused
+                  ? 'border-primary-600/50 text-white'
+                  : 'border-[#2a2a3e] text-gray-500'
+            }`}
+          />
+          {/* Tags: CSV indicator + clear button */}
+          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            {isFromCsv && (
+              <span className="text-[8px] text-emerald-500/60 bg-emerald-900/20 px-1 py-0.5 rounded">CSV</span>
+            )}
+            {value && !isFromCsv && (
+              <span className="text-[8px] text-amber-500/60 bg-amber-900/20 px-1 py-0.5 rounded">Manual</span>
+            )}
+            {value && (
+              <button
+                onClick={handleClear}
+                className="text-gray-600 hover:text-red-400 transition-colors"
+                tabIndex={-1}
+              >
+                <i className="ri-close-circle-line text-xs" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Dropdown */}
+      {showDropdown && filtered.length > 0 && (
+        <div className="absolute z-30 mt-1 w-full bg-[#1c1c28] border border-[#2a2a3e] rounded-md shadow-xl max-h-40 overflow-auto">
+          {filtered.map(s => {
+            const isAssigned = assignedIds.has(s) && s !== currentValue;
+            return (
+              <button
+                key={s}
+                onMouseDown={e => { e.preventDefault(); handleSelect(s); }}
+                disabled={isAssigned}
+                className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                  isAssigned
+                    ? 'text-gray-600 cursor-not-allowed'
+                    : s === value
+                      ? 'bg-primary-900/30 text-primary-300'
+                      : 'text-gray-300 hover:bg-[#1e1e42]'
+                }`}
+              >
+                <span className="font-mono">{s}</span>
+                {isAssigned && <span className="text-[9px] text-gray-600 ml-2">(assigned)</span>}
+              </button>
+            );
+          })}
+        </div>
       )}
     </div>
   );

@@ -1,11 +1,26 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, FileSource } from '@prisma/client';
 import { sessionAuth } from '../middleware/sessionAuth';
 import { FileStoreService } from '../services/fileStore.service';
 import { ConfigStoreService } from '../services/configStore.service';
 import { parseDamGenCsv } from '../utils/damGenParser';
 
 const prisma = new PrismaClient();
+
+/** Find the DAM_GEN file source by key, parserKey, or filename pattern */
+async function findDamGenSource(fileStore: FileStoreService, groupId: string): Promise<FileSource | null> {
+  // Try common key names first
+  for (const key of ['dam-gen', 'dam_gen', 'DAM_GEN', 'DAM_GEN.csv']) {
+    const source = await fileStore.getSource(groupId, key);
+    if (source) return source;
+  }
+  // Fallback: search all sources for this group by filename pattern
+  const allSources = await prisma.fileSource.findMany({ where: { groupId } });
+  return allSources.find(s =>
+    s.filename.toLowerCase().includes('dam_gen') ||
+    s.parserKey === 'dam-gen'
+  ) ?? null;
+}
 
 export function createPortfolioMappingRoutes(
   fileStore: FileStoreService,
@@ -29,7 +44,7 @@ export function createPortfolioMappingRoutes(
   router.get('/dam-portfolios', sessionAuth, async (req, res, next) => {
     try {
       const groupId = String(req.session.portalSession!.groupId);
-      const source = await fileStore.getSource(groupId, 'dam-gen');
+      const source = await findDamGenSource(fileStore, groupId);
       if (!source) {
         return res.json({ portfolios: [], sourceVersion: null, message: 'No dam-gen file source configured' });
       }
