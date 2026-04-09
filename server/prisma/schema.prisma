@@ -151,3 +151,22 @@ model FileVersion {
   @@index([sourceId, isCurrent])
   @@index([sourceId, fetchedAt(sort: Desc)])
 }
+
+// ── Portfolio Mapping ──
+
+model PortfolioMapping {
+  id            Int      @id @default(autoincrement())
+  groupId       String
+  portfolioType String   @default("DAM")  // "DAM" | "IDM" | "AFRR"
+  externalId    String                     // IBEX portfolio ID: "B00214-10"
+  displayName   String?                    // optional user label
+  companyId     Int                        // SmartPulse PortalCompany.id
+  companyName   String                     // denormalized for display
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  updatedBy     String?                    // username
+
+  @@unique([groupId, portfolioType, externalId])
+  @@unique([groupId, portfolioType, companyId])
+  @@index([groupId, portfolioType])
+}

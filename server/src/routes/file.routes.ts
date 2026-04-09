@@ -5,6 +5,7 @@ import { FileIngestionWorker } from '../workers/fileIngestion.worker';
 import { FtpService } from '../services/ftp.service';
 import { ConfigStoreService } from '../services/configStore.service';
 import { parseMultiBatteryTechParams } from '../utils/techParamsParser';
+import { parseDamGenCsv } from '../utils/damGenParser';
 import { parseAutoMappingCsv } from '../utils/autoMappingParser';
 import { syncAttributesFromCsv } from '../services/attributeSync.service';
 import { mergeDefinitions } from '@smartpulse-intl/shared';
@@ -12,6 +13,7 @@ import { mergeDefinitions } from '@smartpulse-intl/shared';
 // Parser registry — domain-specific parsers for known file types
 const FILE_PARSERS: Record<string, (raw: string) => unknown> = {
   'tech-params': (raw) => parseMultiBatteryTechParams(raw),
+  'dam-gen': (raw) => parseDamGenCsv(raw),
 };
 
 export function createFileRoutes(

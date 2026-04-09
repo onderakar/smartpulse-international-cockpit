@@ -7,6 +7,7 @@ import { PollingConfigForm } from '../components/settings/PollingConfigForm';
 import { AttributeDefinitionsForm } from '../components/settings/AttributeDefinitionsForm';
 import { PortfolioViewer } from '../components/settings/PortfolioViewer';
 import { FileSourcesManager } from '../components/settings/FileSourcesManager';
+import { DamPortfolioManager } from '../components/settings/DamPortfolioManager';
 import { useLocale } from '../context/LocaleContext';
 import { useProfile } from '../context/ProfileContext';
 import { DashboardProfile } from '@shared/types/dashboard.types';
@@ -97,6 +98,7 @@ export function SettingsPage() {
         <AssetMappingForm />
         <AttributeDefinitionsForm />
         <FileSourcesManager />
+        <DamPortfolioManager />
         <PortfolioViewer />
         <MonitoringCredentialsForm />
         <GQLTestConfig />

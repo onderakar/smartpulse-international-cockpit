@@ -551,6 +551,17 @@ const T = {
   'fileIngestion.saveBack':        { tr: 'FTP\'ye Geri Kaydet', en: 'Save Back to FTP' },
   'fileIngestion.savedBack':       { tr: 'FTP\'ye kaydedildi', en: 'Saved back to FTP' },
   'fileIngestion.preview':         { tr: 'Dosya Önizleme', en: 'File Preview' },
+
+  // ==================== DAM Portfolio Mapping ====================
+  'damPortfolio.title':            { tr: 'DAM & IDM Portföy Yönetimi', en: 'DAM & IDM Portfolio Management' },
+  'damPortfolio.portfolioId':      { tr: 'Portföy ID', en: 'Portfolio ID' },
+  'damPortfolio.company':          { tr: 'SmartPulse Company', en: 'SmartPulse Company' },
+  'damPortfolio.status':           { tr: 'Durum', en: 'Status' },
+  'damPortfolio.selectCompany':    { tr: '— Seçiniz —', en: '— Select —' },
+  'damPortfolio.noSource':         { tr: 'DAM_GEN.csv dosya kaynağı tanımlanmamış. Önce File Data Sources bölümünden ekleyin.', en: 'No dam-gen file source configured. Add it in File Data Sources first.' },
+  'damPortfolio.noPortfolios':     { tr: 'DAM_GEN.csv içinde portföy bulunamadı.', en: 'No portfolios found in DAM_GEN.csv.' },
+  'damPortfolio.notInCsv':         { tr: 'CSV\'de yok', en: 'Not in CSV' },
+  'damPortfolio.refreshed':        { tr: 'DAM verileri güncellendi', en: 'DAM data refreshed' },
 } as const;
 
 export type TranslationKey = keyof typeof T;
