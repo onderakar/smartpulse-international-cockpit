@@ -563,6 +563,22 @@ const T = {
   'damPortfolio.notInCsv':         { tr: 'CSV\'de yok', en: 'Not in CSV' },
   'damPortfolio.refreshed':        { tr: 'DAM verileri güncellendi', en: 'DAM data refreshed' },
   'damPortfolio.typeOrSelect':     { tr: 'Yazın veya seçin...', en: 'Type or select...' },
+
+  // ==================== Intraday ====================
+  'intraday.title':                { tr: 'Intraday İşlem Yönetimi', en: 'Intraday Transaction Management' },
+  'intraday.refresh':              { tr: 'İşlemleri Çek', en: 'Fetch Transactions' },
+  'intraday.fetching':             { tr: 'Çekiliyor...', en: 'Fetching...' },
+  'intraday.startDate':            { tr: 'Başlangıç', en: 'Start Date' },
+  'intraday.endDate':              { tr: 'Bitiş', en: 'End Date' },
+  'intraday.companies':            { tr: 'Şirketler', en: 'Companies' },
+  'intraday.selectAll':            { tr: 'Tümünü Seç', en: 'Select All' },
+  'intraday.deselectAll':          { tr: 'Tümünü Kaldır', en: 'Deselect All' },
+  'intraday.selectCompany':        { tr: 'En az bir şirket seçin', en: 'Select at least one company' },
+
+  // ==================== Widget: Company Trading ====================
+  'widget.damTrade':               { tr: 'DAM Trade (MW)', en: 'DAM Trade (MW)' },
+  'widget.genForecast':            { tr: 'Üretim Tahmini (MW)', en: 'Generation Forecast (MW)' },
+  'widget.idmNetPos':              { tr: 'IDM Net Pozisyon (MW)', en: 'IDM Net Position (MW)' },
 } as const;
 
 export type TranslationKey = keyof typeof T;

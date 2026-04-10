@@ -8,6 +8,7 @@ import { AttributeDefinitionsForm } from '../components/settings/AttributeDefini
 import { PortfolioViewer } from '../components/settings/PortfolioViewer';
 import { FileSourcesManager } from '../components/settings/FileSourcesManager';
 import { DamPortfolioManager } from '../components/settings/DamPortfolioManager';
+import { IntradayRefreshPanel } from '../components/settings/IntradayRefreshPanel';
 import { useLocale } from '../context/LocaleContext';
 import { useProfile } from '../context/ProfileContext';
 import { DashboardProfile } from '@shared/types/dashboard.types';
@@ -99,6 +100,7 @@ export function SettingsPage() {
         <AttributeDefinitionsForm />
         <FileSourcesManager />
         <DamPortfolioManager />
+        <IntradayRefreshPanel />
         <PortfolioViewer />
         <MonitoringCredentialsForm />
         <GQLTestConfig />
