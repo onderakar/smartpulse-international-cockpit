@@ -7,6 +7,7 @@ import { createPortfolioRoutes } from './portfolio.routes';
 import { createFileRoutes } from './file.routes';
 import { createPortfolioMappingRoutes } from './portfolioMapping.routes';
 import { createEntityTimeSeriesRoutes } from './entityTimeSeries.routes';
+import { createIntradayRoutes } from './intraday.routes';
 import { FileStoreService } from '../services/fileStore.service';
 import { FileIngestionWorker } from '../workers/fileIngestion.worker';
 import { createConfigRoutes } from './config.routes';
@@ -49,6 +50,7 @@ export async function createRoutes(): Promise<Router> {
   router.use('/files', createFileRoutes(fileStore, fileIngestionWorker, ftpService, configStore));
   router.use('/portfolio-mapping', createPortfolioMappingRoutes(fileStore, configStore));
   router.use('/time-series', createEntityTimeSeriesRoutes());
+  router.use('/intraday', createIntradayRoutes());
 
   return router;
 }

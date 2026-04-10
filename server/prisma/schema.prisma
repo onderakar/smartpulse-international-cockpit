@@ -189,3 +189,33 @@ model EntityTimeSeries {
   @@index([groupId, entityType, entityId, seriesKey, deliveryStart])        // history for a specific slot
   @@index([deliveryStart])                                                   // date range queries
 }
+
+// ── Intraday Transactions ──
+
+model IntradayTransaction {
+  id               Int      @id @default(autoincrement())
+  groupId          String
+  remoteTradeId    String                  // SmartPulse unique trade ID — dedup key
+  companyId        Int
+  companyName      String
+  deliveryStart    DateTime
+  deliveryEnd      DateTime
+  direction        Boolean                 // true = buy, false = sell
+  quantity         Float                   // MW
+  price            Float
+  tradeTime        DateTime
+  contractId       String?
+  contractName     String?
+  productType      String?
+  status           Int       @default(0)
+  revisionNo       Int       @default(1)
+  username         String?
+  explanation      String?
+  platformCode     String?
+  areaCode         String?
+  createdAt        DateTime  @default(now())
+
+  @@unique([groupId, remoteTradeId])          // dedup: same trade never stored twice
+  @@index([groupId, companyId, deliveryStart]) // company + date queries
+  @@index([groupId, deliveryStart])            // date range queries
+}
