@@ -4,6 +4,7 @@ import { envConfig } from './config/env';
 import { FileWatcherWorker } from './workers/fileWatcher.worker';
 import { ScadaWorker } from './workers/scada.worker';
 import { FileIngestionWorker } from './workers/fileIngestion.worker';
+import { IntradayWorker } from './workers/intraday.worker';
 import { registerFileIngestionHooks } from './adapters/fileIngestionHooks';
 import { setupWebSocket } from './websocket';
 
@@ -35,6 +36,9 @@ async function main() {
 
   const fileIngestionWorker = new FileIngestionWorker();
   fileIngestionWorker.start().catch(err => console.error('[FileIngestionWorker] Failed to start:', err));
+
+  const intradayWorker = new IntradayWorker();
+  intradayWorker.start().catch(err => console.error('[IntradayWorker] Failed to start:', err));
 
   console.log('  Workers:     [STARTING]');
 }

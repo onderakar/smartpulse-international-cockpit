@@ -40,6 +40,10 @@ export class IntradayService {
    * store raw transactions (dedup by remoteTradeId),
    * then aggregate net position per delivery slot into EntityTimeSeries.
    */
+  /**
+   * Fetch intraday transactions for multiple companies in parallel (one API call per company),
+   * store raw transactions, then aggregate net positions.
+   */
   async refreshTransactions(
     groupId: string,
     companyIds: number[],
@@ -49,54 +53,81 @@ export class IntradayService {
     portalCookies: string[],
     env: string,
   ): Promise<{ newTransactions: number; skipped: number; aggregated: { inserted: number; skipped: number } }> {
-    const baseUrl = PORTAL_BASE_URLS[env] || PORTAL_BASE_URLS.prod;
+    const CONCURRENCY = 3; // max parallel API calls
 
-    // Build headers: prefer bearer token, fallback to cookies
-    const headers: Record<string, string> = { Cookie: portalCookies.join('; ') };
-    if (accessToken) {
-      headers.Authorization = `bearer ${accessToken}`;
+    let totalNew = 0;
+    let totalSkip = 0;
+
+    // Process companies in parallel batches
+    for (let i = 0; i < companyIds.length; i += CONCURRENCY) {
+      const batch = companyIds.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map(companyId =>
+          this.fetchAndStoreForCompany(groupId, companyId, startDate, endDate, accessToken, portalCookies, env)
+        )
+      );
+
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          totalNew += r.value.newCount;
+          totalSkip += r.value.skipCount;
+        } else {
+          console.error(`[Intraday] Company batch error:`, r.reason?.message?.substring(0, 200));
+        }
+      }
     }
 
-    // 1. Fetch from SmartPulse API
+    // Aggregate net position for all companies
+    const aggregated = await this.aggregateNetPositions(groupId, companyIds, startDate, endDate);
+
+    console.log(
+      `[Intraday] group=${groupId}: ${totalNew} upserted, ${totalSkip} errors across ${companyIds.length} companies, ` +
+      `aggregated: ${aggregated.inserted} inserted, ${aggregated.skipped} unchanged`
+    );
+
+    return { newTransactions: totalNew, skipped: totalSkip, aggregated };
+  }
+
+  /** Fetch + store transactions for a single company */
+  private async fetchAndStoreForCompany(
+    groupId: string,
+    companyId: number,
+    startDate: string,
+    endDate: string,
+    accessToken: string,
+    portalCookies: string[],
+    env: string,
+  ): Promise<{ newCount: number; skipCount: number }> {
+    const baseUrl = PORTAL_BASE_URLS[env] || PORTAL_BASE_URLS.prod;
+    const headers: Record<string, string> = { Cookie: portalCookies.join('; ') };
+    if (accessToken) headers.Authorization = `bearer ${accessToken}`;
+
     const response = await axios.post<TransactionReportResponse>(
       `${baseUrl}/IntradayPlanning/GetTransactionReport`,
       {
-        CompanyIds: companyIds,
+        CompanyIds: [companyId],
         StartDate: startDate,
         EndDate: endDate,
         StartRow: 0,
         EndRow: 100000,
         Directions: [],
       },
-      { headers, timeout: 30_000 },
+      { headers, timeout: 60_000 },
     );
 
     const rows = response.data?.RowData ?? [];
-    console.log(`[Intraday] API status=${response.status}, RowCount=${response.data?.RowCount}, RowData.length=${rows.length} for companies [${companyIds.join(',')}]`);
-    if (rows.length === 0) {
-      console.log(`[Intraday] Empty response. Keys: ${Object.keys(response.data || {}).join(',')}, StartDate=${startDate}, EndDate=${endDate}`);
-    }
+    console.log(`[Intraday] Company ${companyId}: ${rows.length} transactions fetched`);
 
-    // 2. Store raw transactions (upsert by remoteTradeId)
     let newCount = 0;
     let skipCount = 0;
 
-    // Log first row for debugging
-    if (rows.length > 0) {
-      console.log(`[Intraday] Sample row keys: ${Object.keys(rows[0]).join(', ')}`);
-      console.log(`[Intraday] Sample row: Id=${rows[0].Id}, RemoteTradeId="${rows[0].RemoteTradeId}", CompanyId=${rows[0].CompanyId}, Qty=${rows[0].Quantity}, Dir=${rows[0].OrderDirection}`);
-    }
-
     for (const row of rows) {
-      // Use Id as fallback if RemoteTradeId is empty
       const tradeId = row.RemoteTradeId || String(row.Id);
       if (!tradeId) continue;
 
       try {
         await prisma.intradayTransaction.upsert({
-          where: {
-            groupId_remoteTradeId: { groupId, remoteTradeId: tradeId },
-          },
+          where: { groupId_remoteTradeId: { groupId, remoteTradeId: tradeId } },
           update: {
             quantity: Number(row.Quantity) || 0,
             price: Number(row.Price) || 0,
@@ -130,21 +161,12 @@ export class IntradayService {
       } catch (err: any) {
         skipCount++;
         if (skipCount <= 1) {
-          console.warn(`[Intraday] FULL ERROR for tradeId="${tradeId}":`);
-          console.warn(String(err).substring(0, 1000));
+          console.warn(`[Intraday] Upsert error company=${companyId} trade="${tradeId}":`, String(err).substring(0, 300));
         }
       }
     }
 
-    // 3. Aggregate net position per (companyId, deliveryStart) → EntityTimeSeries
-    const aggregated = await this.aggregateNetPositions(groupId, companyIds, startDate, endDate);
-
-    console.log(
-      `[Intraday] group=${groupId}: ${newCount} upserted, ${skipCount} errors, ` +
-      `aggregated: ${aggregated.inserted} inserted, ${aggregated.skipped} unchanged`
-    );
-
-    return { newTransactions: newCount, skipped: skipCount, aggregated };
+    return { newCount, skipCount };
   }
 
   /**

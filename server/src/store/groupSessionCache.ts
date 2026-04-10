@@ -6,6 +6,7 @@
 
 interface CachedSession {
   portalCookies: string[];
+  accessToken: string;
   env: string;
   username: string;
   updatedAt: number;
@@ -14,7 +15,7 @@ interface CachedSession {
 const cache = new Map<string, CachedSession>();
 
 /** Store (or update) session for a group. Called from auth route on successful login. */
-export function cacheGroupSession(groupId: string, session: { portalCookies: string[]; env: string; username: string }) {
+export function cacheGroupSession(groupId: string, session: { portalCookies: string[]; accessToken: string; env: string; username: string }) {
   cache.set(groupId, { ...session, updatedAt: Date.now() });
 }
 

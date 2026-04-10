@@ -46,7 +46,7 @@ export function createAuthRoutes(
       };
 
       // Cache session for background workers (FileIngestionWorker, etc.)
-      cacheGroupSession(groupIdStr, { portalCookies: result.cookies, env, username });
+      cacheGroupSession(groupIdStr, { portalCookies: result.cookies, accessToken: result.accessToken, env, username });
 
       // Re-associate legacy group profile with real portal groupId
       if (groupId) {
