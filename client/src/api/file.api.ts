@@ -77,4 +77,8 @@ export const fileApi = {
     const { data } = await apiClient.post(`/files/${key}/save`, { content });
     return data;
   },
+  async triggerConsumers(key: string): Promise<{ triggered: boolean; sourceKey: string; versionNo: number }> {
+    const { data } = await apiClient.post(`/files/${key}/trigger-consumers`);
+    return data;
+  },
 };

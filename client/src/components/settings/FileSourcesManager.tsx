@@ -13,6 +13,7 @@ export function FileSourcesManager() {
   const [preview, setPreview] = useState<{ key: string; rawContent: string; fileType: string; sizeBytes: number; filename: string } | null>(null);
   const [testingKey, setTestingKey] = useState<string | null>(null);
   const [readingKey, setReadingKey] = useState<string | null>(null);
+  const [triggeringKey, setTriggeringKey] = useState<string | null>(null);
 
   const loadSources = useCallback(async () => {
     try {
@@ -73,6 +74,18 @@ export function FileSourcesManager() {
     }
   };
 
+  const handleTriggerConsumers = async (source: FileSourceDto) => {
+    setTriggeringKey(source.key);
+    try {
+      const result = await fileApi.triggerConsumers(source.key);
+      toast.success(`${source.displayName}: consumers triggered (v#${result.versionNo})`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Trigger failed');
+    } finally {
+      setTriggeringKey(null);
+    }
+  };
+
   const handleToggleEnabled = async (source: FileSourceDto) => {
     try {
       await fileApi.updateSource(source.id, { enabled: !source.enabled });
@@ -120,8 +133,10 @@ export function FileSourcesManager() {
               isEditing={editingId === source.id}
               isTesting={testingKey === source.key}
               isReading={readingKey === source.key}
+              isTriggering={triggeringKey === source.key}
               onTest={() => handleTest(source)}
               onReadNow={() => handleReadNow(source)}
+              onTriggerConsumers={() => handleTriggerConsumers(source)}
               onEdit={() => setEditingId(editingId === source.id ? null : source.id)}
               onDelete={() => handleDelete(source)}
               onToggleEnabled={() => handleToggleEnabled(source)}
@@ -153,15 +168,17 @@ interface SourceCardProps {
   isEditing: boolean;
   isTesting: boolean;
   isReading: boolean;
+  isTriggering: boolean;
   onTest: () => void;
   onReadNow: () => void;
+  onTriggerConsumers: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onToggleEnabled: () => void;
   onEditSave: () => void;
 }
 
-function SourceCard({ source, isEditing, isTesting, isReading, onTest, onReadNow, onEdit, onDelete, onToggleEnabled, onEditSave }: SourceCardProps) {
+function SourceCard({ source, isEditing, isTesting, isReading, isTriggering, onTest, onReadNow, onTriggerConsumers, onEdit, onDelete, onToggleEnabled, onEditSave }: SourceCardProps) {
   const { t } = useLocale();
   const currentVersion = source.versions?.[0];
 
@@ -225,6 +242,15 @@ function SourceCard({ source, isEditing, isTesting, isReading, onTest, onReadNow
             title={t('fileIngestion.readNow')}
           >
             {isReading ? <i className="ri-loader-4-line animate-spin" /> : <i className="ri-refresh-line" />}
+          </button>
+
+          <button
+            onClick={onTriggerConsumers}
+            disabled={isTriggering}
+            className="text-[10px] text-amber-400 hover:text-amber-300 bg-amber-900/20 border border-amber-800/40 rounded px-2 py-1 transition-colors disabled:opacity-40"
+            title="Refresh Consumers"
+          >
+            {isTriggering ? <i className="ri-loader-4-line animate-spin" /> : <i className="ri-flashlight-line" />}
           </button>
 
           <button

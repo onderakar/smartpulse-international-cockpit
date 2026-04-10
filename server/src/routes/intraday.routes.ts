@@ -3,6 +3,7 @@ import { sessionAuth } from '../middleware/sessionAuth';
 import { IntradayService } from '../services/intraday.service';
 
 export function createIntradayRoutes(): Router {
+  console.log('=== INTRADAY ROUTES V2 LOADED ===');
   const router = Router();
   const intradayService = new IntradayService();
 
@@ -21,15 +22,19 @@ export function createIntradayRoutes(): Router {
         return res.status(400).json({ message: 'companyIds, startDate, endDate are required' });
       }
 
+      console.log(`[Intraday Route] refresh called: companies=${JSON.stringify(companyIds)}, start=${startDate}, end=${endDate}, token=${session.portalAccessToken ? 'yes' : 'no'}, cookies=${session.portalCookies?.length ?? 0}`);
+
       const result = await intradayService.refreshTransactions(
         groupId,
         companyIds,
         startDate,
         endDate,
         session.portalAccessToken,
+        session.portalCookies,
         session.env,
       );
 
+      console.log(`[Intraday Route] result:`, JSON.stringify(result));
       res.json(result);
     } catch (err) { next(err); }
   });

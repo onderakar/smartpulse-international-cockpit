@@ -6,6 +6,7 @@ import { FtpService } from '../services/ftp.service';
 import { ConfigStoreService } from '../services/configStore.service';
 import { parseMultiBatteryTechParams } from '../utils/techParamsParser';
 import { parseDamGenCsv } from '../utils/damGenParser';
+import { eventBus, EVENTS } from '../eventBus';
 import { parseAutoMappingCsv } from '../utils/autoMappingParser';
 import { syncAttributesFromCsv } from '../services/attributeSync.service';
 import { mergeDefinitions } from '@smartpulse-intl/shared';
@@ -205,6 +206,29 @@ export function createFileRoutes(
         fileType,
         sizeBytes: Buffer.byteLength(rawContent, 'utf-8'),
       });
+    } catch (err) { next(err); }
+  });
+
+  // POST /api/files/:key/trigger-consumers — manually fire FILE_UPDATED event for adapters
+  router.post('/:key/trigger-consumers', sessionAuth, async (req, res, next) => {
+    try {
+      const groupId = String(req.session.portalSession!.groupId);
+      const source = await fileStore.getSource(groupId, req.params.key);
+      if (!source) return res.status(404).json({ message: 'Source not found' });
+
+      const version = await fileStore.getLatestVersion(source.id);
+      if (!version) return res.status(404).json({ message: 'No version available' });
+
+      console.log(`[Files] Manually triggering consumers for ${req.params.key} (version #${version.versionNo})`);
+
+      eventBus.emit(EVENTS.FILE_UPDATED, {
+        groupId,
+        sourceKey: source.key,
+        versionId: version.id,
+        versionNo: version.versionNo,
+      });
+
+      res.json({ triggered: true, sourceKey: source.key, versionNo: version.versionNo });
     } catch (err) { next(err); }
   });
 

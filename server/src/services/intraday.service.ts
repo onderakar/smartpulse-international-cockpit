@@ -46,9 +46,16 @@ export class IntradayService {
     startDate: string,
     endDate: string,
     accessToken: string,
+    portalCookies: string[],
     env: string,
   ): Promise<{ newTransactions: number; skipped: number; aggregated: { inserted: number; skipped: number } }> {
     const baseUrl = PORTAL_BASE_URLS[env] || PORTAL_BASE_URLS.prod;
+
+    // Build headers: prefer bearer token, fallback to cookies
+    const headers: Record<string, string> = { Cookie: portalCookies.join('; ') };
+    if (accessToken) {
+      headers.Authorization = `bearer ${accessToken}`;
+    }
 
     // 1. Fetch from SmartPulse API
     const response = await axios.post<TransactionReportResponse>(
@@ -61,51 +68,58 @@ export class IntradayService {
         EndRow: 100000,
         Directions: [],
       },
-      {
-        headers: { Authorization: `bearer ${accessToken}` },
-        timeout: 30_000,
-      },
+      { headers, timeout: 30_000 },
     );
 
     const rows = response.data?.RowData ?? [];
-    console.log(`[Intraday] Fetched ${rows.length} transactions for companies [${companyIds.join(',')}]`);
+    console.log(`[Intraday] API status=${response.status}, RowCount=${response.data?.RowCount}, RowData.length=${rows.length} for companies [${companyIds.join(',')}]`);
+    if (rows.length === 0) {
+      console.log(`[Intraday] Empty response. Keys: ${Object.keys(response.data || {}).join(',')}, StartDate=${startDate}, EndDate=${endDate}`);
+    }
 
     // 2. Store raw transactions (upsert by remoteTradeId)
     let newCount = 0;
     let skipCount = 0;
 
+    // Log first row for debugging
+    if (rows.length > 0) {
+      console.log(`[Intraday] Sample row keys: ${Object.keys(rows[0]).join(', ')}`);
+      console.log(`[Intraday] Sample row: Id=${rows[0].Id}, RemoteTradeId="${rows[0].RemoteTradeId}", CompanyId=${rows[0].CompanyId}, Qty=${rows[0].Quantity}, Dir=${rows[0].OrderDirection}`);
+    }
+
     for (const row of rows) {
-      if (!row.RemoteTradeId) continue;
+      // Use Id as fallback if RemoteTradeId is empty
+      const tradeId = row.RemoteTradeId || String(row.Id);
+      if (!tradeId) continue;
 
       try {
         await prisma.intradayTransaction.upsert({
           where: {
-            groupId_remoteTradeId: { groupId, remoteTradeId: row.RemoteTradeId },
+            groupId_remoteTradeId: { groupId, remoteTradeId: tradeId },
           },
           update: {
-            // Update mutable fields on re-fetch
-            quantity: row.Quantity,
-            price: row.Price,
-            status: row.Status,
-            revisionNo: row.RevisionNo,
+            quantity: Number(row.Quantity) || 0,
+            price: Number(row.Price) || 0,
+            status: Number(row.Status) || 0,
+            revisionNo: Number(row.RevisionNo) || 1,
             explanation: row.Explanation ?? null,
           },
           create: {
             groupId,
-            remoteTradeId: row.RemoteTradeId,
-            companyId: row.CompanyId,
-            companyName: row.CompanyName,
+            remoteTradeId: tradeId,
+            companyId: Number(row.CompanyId),
+            companyName: row.CompanyName ?? '',
             deliveryStart: new Date(row.DeliveryStart),
             deliveryEnd: new Date(row.DeliveryEnd),
-            direction: row.OrderDirection,
-            quantity: row.Quantity,
-            price: row.Price,
+            direction: Boolean(row.OrderDirection),
+            quantity: Number(row.Quantity) || 0,
+            price: Number(row.Price) || 0,
             tradeTime: new Date(row.TradeTime),
             contractId: row.ContractId ?? null,
             contractName: row.ContractName ?? null,
             productType: row.ProductType ?? null,
-            status: row.Status,
-            revisionNo: row.RevisionNo,
+            status: Number(row.Status) || 0,
+            revisionNo: Number(row.RevisionNo) || 1,
             username: row.Username ?? null,
             explanation: row.Explanation ?? null,
             platformCode: row.PlatformCode ?? null,
@@ -114,8 +128,11 @@ export class IntradayService {
         });
         newCount++;
       } catch (err: any) {
-        // Duplicate or other constraint error — skip
         skipCount++;
+        if (skipCount <= 1) {
+          console.warn(`[Intraday] FULL ERROR for tradeId="${tradeId}":`);
+          console.warn(String(err).substring(0, 1000));
+        }
       }
     }
 
