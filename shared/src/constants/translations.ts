@@ -392,6 +392,7 @@ const T = {
   // ==================== Forecast Submission Page ====================
   'nav.forecast': { tr: 'Tahmin Yonetimi', en: 'Forecast Mgmt' },
   'nav.batteryProgram': { tr: 'Batarya Programi', en: 'Battery Program' },
+  'nav.intradayReport': { tr: 'Intraday Rapor', en: 'Intraday Report' },
   'forecast.title': { tr: 'Tahmin Yonetimi', en: 'Forecast Management' },
   'forecast.batteries': { tr: 'Bataryalar:', en: 'Batteries:' },
   'forecast.noBess': { tr: 'Hicbir BESS (batarya) component tanimlanmamis.', en: 'No BESS components configured.' },
@@ -579,6 +580,13 @@ const T = {
   'widget.damTrade':               { tr: 'DAM Trade (MW)', en: 'DAM Trade (MW)' },
   'widget.genForecast':            { tr: 'Üretim Tahmini (MW)', en: 'Generation Forecast (MW)' },
   'widget.idmNetPos':              { tr: 'IDM Net Pozisyon (MW)', en: 'IDM Net Position (MW)' },
+
+  // ==================== Intraday Report Page ====================
+  'intradayReport.title':          { tr: 'Intraday İşlem Raporu', en: 'Intraday Transaction Report' },
+  'intradayReport.totalBuy':       { tr: 'Toplam Alım', en: 'Total Buy' },
+  'intradayReport.totalSell':      { tr: 'Toplam Satım', en: 'Total Sell' },
+  'intradayReport.buyDelta':       { tr: 'Alım MCP Δ', en: 'Buy MCP Delta' },
+  'intradayReport.sellDelta':      { tr: 'Satım MCP Δ', en: 'Sell MCP Delta' },
 } as const;
 
 export type TranslationKey = keyof typeof T;

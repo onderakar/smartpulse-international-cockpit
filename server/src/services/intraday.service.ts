@@ -134,6 +134,8 @@ export class IntradayService {
             status: Number(row.Status) || 0,
             revisionNo: Number(row.RevisionNo) || 1,
             explanation: row.Explanation ?? null,
+            mcp: row.Mcp != null ? Number(row.Mcp) : null,
+            smp: row.Smp != null ? Number(row.Smp) : null,
           },
           create: {
             groupId,
@@ -155,6 +157,12 @@ export class IntradayService {
             explanation: row.Explanation ?? null,
             platformCode: row.PlatformCode ?? null,
             areaCode: row.AreaCode ?? null,
+            orderType: row.OrderType ?? null,
+            remoteOrderId: row.RemoteOrderId ?? null,
+            mcp: row.Mcp != null ? Number(row.Mcp) : null,
+            smp: row.Smp != null ? Number(row.Smp) : null,
+            smartbotId: row.SmartbotId != null ? Number(row.SmartbotId) : null,
+            alertName: row.AlertName ?? null,
           },
         });
         newCount++;

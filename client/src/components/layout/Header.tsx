@@ -33,6 +33,9 @@ export function Header() {
           <Link to="/battery-program" className={`pb-1 text-sm font-medium transition-colors ${isActive('/battery-program')}`}>
             {t('nav.batteryProgram')}
           </Link>
+          <Link to="/intraday-report" className={`pb-1 text-sm font-medium transition-colors ${isActive('/intraday-report')}`}>
+            {t('nav.intradayReport')}
+          </Link>
           <Link to="/settings" className={`pb-1 text-sm font-medium transition-colors ${isActive('/settings')}`}>
             {t('nav.settings')}
           </Link>

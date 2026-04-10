@@ -84,14 +84,27 @@ export function CompanyTradingWidget({ selectedDate, onDateChange }: Props) {
     const forecast = seriesData.generation_forecast ?? [];
     const idmNet = seriesData.idm_net_position ?? [];
 
-    const toTimeValue = (points: TimeSeriesPoint[]) =>
-      points.map(p => [new Date(p.deliveryStart).getTime(), p.value]);
+    // Build shared category labels from all series so every data point aligns
+    const allTimestamps = new Set<string>();
+    [damTrade, forecast, idmNet].forEach(arr =>
+      arr.forEach(p => allTimestamps.add(p.deliveryStart)),
+    );
+    const categories = Array.from(allTimestamps).sort();
+    const formatLabel = (iso: string) => {
+      const d = new Date(iso);
+      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    };
+
+    const toAligned = (points: TimeSeriesPoint[]) => {
+      const map = new Map(points.map(p => [p.deliveryStart, p.value]));
+      return categories.map(ts => map.get(ts) ?? null);
+    };
 
     const option: echarts.EChartsOption = {
       backgroundColor: 'transparent',
       tooltip: {
         trigger: 'axis',
-        axisPointer: { type: 'cross' },
+        axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(255,255,255,0.03)' } },
         backgroundColor: '#1c1c28',
         borderColor: '#2a2a3e',
         textStyle: { fontSize: 11 },
@@ -107,40 +120,45 @@ export function CompanyTradingWidget({ selectedDate, onDateChange }: Props) {
       },
       grid: { left: 50, right: 20, top: 40, bottom: 30 },
       xAxis: {
-        type: 'time',
-        axisLabel: { color: '#666', fontSize: 9 },
-        splitLine: { show: false },
+        type: 'category',
+        data: categories.map(formatLabel),
+        axisLabel: { color: '#555', fontSize: 9, interval: 3, rotate: 0 },
+        axisTick: { show: true, alignWithLabel: true, interval: 0, lineStyle: { color: 'rgba(255,255,255,0.06)' } },
+        axisLine: { lineStyle: { color: '#2a2a3e' } },
+        splitLine: { show: true, interval: 0, lineStyle: { color: 'rgba(255,255,255,0.08)', width: 1 } },
       },
       yAxis: {
         type: 'value',
         name: 'MW',
-        nameTextStyle: { color: '#666', fontSize: 9 },
-        axisLabel: { color: '#666', fontSize: 9 },
-        splitLine: { lineStyle: { color: '#2a2a3e' } },
+        nameTextStyle: { color: '#555', fontSize: 9 },
+        axisLabel: { color: '#555', fontSize: 9 },
+        splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', width: 1, type: 'dashed' } },
       },
       series: [
         {
           name: t('widget.damTrade'),
           type: 'bar',
-          data: toTimeValue(damTrade),
-          itemStyle: { color: '#6366f1' },
-          barMaxWidth: 8,
+          stack: 'trading',
+          data: toAligned(damTrade),
+          itemStyle: { color: '#5b8def' },
+          barMaxWidth: 12,
         },
         {
           name: t('widget.genForecast'),
           type: 'line',
-          data: toTimeValue(forecast),
-          lineStyle: { color: '#22c55e', width: 2 },
-          itemStyle: { color: '#22c55e' },
+          data: toAligned(forecast),
+          lineStyle: { color: '#50c878', width: 2 },
+          itemStyle: { color: '#50c878' },
           symbol: 'none',
-          smooth: true,
+          step: 'start',
         },
         {
           name: t('widget.idmNetPos'),
           type: 'bar',
-          data: toTimeValue(idmNet),
-          itemStyle: { color: '#f59e0b' },
-          barMaxWidth: 8,
+          stack: 'trading',
+          data: toAligned(idmNet),
+          itemStyle: { color: '#e8784a' },
+          barMaxWidth: 12,
         },
       ],
     };
@@ -202,15 +220,15 @@ export function CompanyTradingWidget({ selectedDate, onDateChange }: Props) {
       {/* Summary */}
       <div className="flex items-center gap-4 mt-1 text-[10px] text-gray-500 shrink-0">
         <span>
-          <span className="inline-block w-2 h-2 rounded-sm bg-indigo-500 mr-1" />
+          <span className="inline-block w-2 h-2 rounded-sm mr-1" style={{ background: '#5b8def' }} />
           DAM: {seriesData.dam_trade_volume?.length ?? 0}
         </span>
         <span>
-          <span className="inline-block w-2 h-2 rounded-sm bg-green-500 mr-1" />
+          <span className="inline-block w-2 h-2 rounded-sm mr-1" style={{ background: '#50c878' }} />
           Forecast: {seriesData.generation_forecast?.length ?? 0}
         </span>
         <span>
-          <span className="inline-block w-2 h-2 rounded-sm bg-amber-500 mr-1" />
+          <span className="inline-block w-2 h-2 rounded-sm mr-1" style={{ background: '#e8784a' }} />
           IDM: {seriesData.idm_net_position?.length ?? 0}
         </span>
       </div>

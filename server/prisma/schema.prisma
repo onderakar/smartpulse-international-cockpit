@@ -213,6 +213,12 @@ model IntradayTransaction {
   explanation      String?
   platformCode     String?
   areaCode         String?
+  orderType        String?
+  remoteOrderId    String?
+  mcp              Float?
+  smp              Float?
+  smartbotId       Int?
+  alertName        String?
   createdAt        DateTime  @default(now())
 
   @@unique([groupId, remoteTradeId])          // dedup: same trade never stored twice

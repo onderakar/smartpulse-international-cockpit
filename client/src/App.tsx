@@ -15,6 +15,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { BatteryParamsPage } from './pages/BatteryParamsPage';
 import { ForecastPage } from './pages/ForecastPage';
 import { BatteryProgramPage } from './pages/BatteryProgramPage';
+import { IntradayReportPage } from './pages/IntradayReportPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 export function App() {
@@ -36,6 +37,7 @@ export function App() {
                   <Route path="/battery-params" element={<BatteryParamsPage />} />
                   <Route path="/forecast" element={<ForecastPage />} />
                   <Route path="/battery-program" element={<BatteryProgramPage />} />
+                  <Route path="/intraday-report" element={<IntradayReportPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                 </Route>
               </Route>

@@ -17,10 +17,21 @@ export interface IntradayTransactionDto {
   quantity: number;
   price: number;
   tradeTime: string;
+  contractId: string | null;
   contractName: string | null;
   productType: string | null;
   status: number;
+  revisionNo: number;
+  username: string | null;
   explanation: string | null;
+  platformCode: string | null;
+  areaCode: string | null;
+  orderType: string | null;
+  remoteOrderId: string | null;
+  mcp: number | null;
+  smp: number | null;
+  smartbotId: number | null;
+  alertName: string | null;
 }
 
 export const intradayApi = {
