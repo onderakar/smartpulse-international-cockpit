@@ -19,7 +19,7 @@ export class ScadaWorker {
     private static readonly HEALTH_CHECK_LOOKBACK_MS = 26 * 60 * 60 * 1000;
     private static readonly MIN_POINTS_PER_HOUR = 30;
 
-    constructor(private intervalMs: number = 10000) { }
+    constructor(private intervalMs: number = 30000) { }
 
     async start() {
         if (this.isRunning) return;
@@ -410,7 +410,7 @@ export class ScadaWorker {
                                     node: metric.node,
                                     nodeidentity: metric.nodeidentity,
                                     tag: metric.tag,
-                                    start: new Date(Date.now() - 7200000).toISOString(),
+                                    start: new Date(Date.now() - 3600000).toISOString(),
                                     end: new Date().toISOString(),
                                     credentials: g.monitoringCredentials
                                 });
@@ -428,7 +428,7 @@ export class ScadaWorker {
                                 node: gcp.name,
                                 nodeidentity: parseInt(gcpIdStr, 10) || 0,
                                 tag: 'GENERIC',
-                                start: new Date(Date.now() - 7200000).toISOString(),
+                                start: new Date(Date.now() - 3600000).toISOString(),
                                 end: new Date().toISOString(),
                                 credentials: g.monitoringCredentials
                             });
