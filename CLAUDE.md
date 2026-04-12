@@ -210,6 +210,7 @@ Copy `.env.example` to `.env` and configure:
 - **DST awareness**: Timezone comes from group info at login. All time logic must handle DST transitions. Do NOT assume fixed UTC offset like the TR cockpit does.
 - **No portal plant at GCP level**: GridConnectionPoint does NOT have a primaryPortalPlantId. Only components have portalPlantId.
 - **Market-agnostic**: Do NOT hardcode Bulgaria or any specific country. The region/market is determined by the group at login.
+- **Session memory**: At the end of every session where architectural decisions, new modules, or configuration choices are made, update `ARCHITECTURE_NOTES.md` with concise notes (max 100 lines). Every new session must read this file to understand what the system does.
 
 ## File Structure Quick Reference
 

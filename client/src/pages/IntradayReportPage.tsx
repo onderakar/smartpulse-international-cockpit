@@ -17,7 +17,6 @@ export function IntradayReportPage() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [transactions, setTransactions] = useState<IntradayTransactionDto[]>([]);
   const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
 
   // Auto-select first company
   useEffect(() => {
@@ -30,6 +29,13 @@ export function IntradayReportPage() {
     if (!selectedCompanyId) return;
     setLoading(true);
     try {
+      // 1. Fetch fresh from SmartPulse API
+      await intradayApi.refresh(
+        [selectedCompanyId],
+        `${date}T00:00:00`,
+        `${date}T23:59:59`,
+      );
+      // 2. Load from DB
       const result = await intradayApi.getTransactions(
         selectedCompanyId,
         `${date}T00:00:00`,
@@ -44,23 +50,6 @@ export function IntradayReportPage() {
   }, [selectedCompanyId, date]);
 
   useEffect(() => { loadData(); }, [loadData]);
-
-  const handleRefresh = useCallback(async () => {
-    if (!selectedCompanyId) return;
-    setRefreshing(true);
-    try {
-      await intradayApi.refresh(
-        [selectedCompanyId],
-        `${date}T00:00:00`,
-        `${date}T23:59:59`,
-      );
-      await loadData();
-    } catch (err: any) {
-      toast.error(err?.message || 'Refresh failed');
-    } finally {
-      setRefreshing(false);
-    }
-  }, [selectedCompanyId, date, loadData]);
 
   // ── Dashboard Calculations ──
   const stats = useMemo(() => {
@@ -271,24 +260,14 @@ export function IntradayReportPage() {
             className="bg-[#12121c] border border-[#2a2a3e] text-white text-xs rounded px-2.5 py-1.5"
           />
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing || !selectedCompanyId}
-            className="flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 bg-amber-900/20 border border-amber-800/40 rounded-md px-3 py-1.5 transition-colors disabled:opacity-40"
-          >
-            <i className={`ri-download-cloud-line text-sm ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? t('intraday.fetching') : 'Fetch IDM'}
-          </button>
-          <button
-            onClick={loadData}
-            disabled={loading}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-[#12121c] border border-[#2a2a3e] rounded-md px-3 py-1.5 transition-colors disabled:opacity-40"
-          >
-            <i className={`ri-refresh-line text-sm ${loading ? 'animate-spin' : ''}`} />
-            {t('common.refresh')}
-          </button>
-        </div>
+        <button
+          onClick={loadData}
+          disabled={loading}
+          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-[#12121c] border border-[#2a2a3e] rounded-md px-3 py-1.5 transition-colors disabled:opacity-40"
+        >
+          <i className={`ri-refresh-line text-sm ${loading ? 'animate-spin' : ''}`} />
+          {t('common.refresh')}
+        </button>
       </div>
 
       {/* Dashboard Widgets */}
