@@ -12,9 +12,17 @@ export const monitoringApi = {
     companyId: number,
     startIso: string,
     endIso: string,
+    options?: { maxPoints?: number; mode?: 'full' | 'incremental' },
   ): Promise<RawMetricPoint[]> {
     const { data } = await apiClient.get('/monitoring/v2/metrics', {
-      params: { gcpId, companyId, start: startIso, end: endIso },
+      params: {
+        gcpId,
+        companyId,
+        start: startIso,
+        end: endIso,
+        ...(options?.maxPoints !== undefined && { maxPoints: options.maxPoints }),
+        ...(options?.mode && { mode: options.mode }),
+      },
     });
     return data;
   },
