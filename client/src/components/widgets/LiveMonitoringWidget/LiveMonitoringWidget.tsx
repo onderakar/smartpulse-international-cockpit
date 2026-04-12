@@ -1,21 +1,16 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
 import { useProfile } from '../../../context/ProfileContext';
 import { useLocale } from '../../../context/LocaleContext';
-import { monitoringApi } from '../../../api/monitoring.api';
+import { useMonitoring } from '../../../context/MonitoringContext';
 import {
   getAllGcps,
-  GridConnectionPoint,
-  CompanyMapping,
 } from '@smartpulse-intl/shared';
-import type { RawMetricPoint, MetricDataPoint } from '@smartpulse-intl/shared';
+import type { MetricDataPoint } from '@smartpulse-intl/shared';
 
-// ── Colors ──
 const COMPONENT_COLORS = ['#29B6F6', '#FFB300', '#00BFA5', '#5C6BC0', '#FF7043', '#66BB6A', '#AB47BC', '#EF5350'];
 const TOTAL_COLOR = '#B0BEC5';
-const SOC_COLOR = '#4CAF50';
-const BAP_COLOR = '#29B6F6';
 
 interface ComponentSeries {
   componentId: string;
@@ -27,23 +22,14 @@ interface ComponentSeries {
 export function LiveMonitoringWidget() {
   const { profile } = useProfile();
   const { t } = useLocale();
+  const { data, isLoading, error } = useMonitoring();
   const mapping = profile?.assetMapping ?? null;
 
-  // All GCPs
   const allGcps = useMemo(() => getAllGcps(mapping), [mapping]);
-
-  // Find company for a GCP
-  const findCompany = useCallback((gcpId: number): CompanyMapping | undefined => {
-    return mapping?.companies?.find(c =>
-      c.gridConnectionPoints?.some(g => g.id === gcpId)
-    );
-  }, [mapping]);
-
-  // Selected GCP
   const [selectedGcpId, setSelectedGcpId] = useState<number | null>(null);
+
   useEffect(() => {
     if (allGcps.length > 0 && selectedGcpId === null) {
-      // Default to first GCP that has monitoring configured
       const withMonitoring = allGcps.find(g =>
         g.components?.some(c => c.monitoring?.metrics?.length)
       );
@@ -56,100 +42,26 @@ export function LiveMonitoringWidget() {
     [allGcps, selectedGcpId]
   );
 
-  // Data state
-  const [rawMetrics, setRawMetrics] = useState<RawMetricPoint[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { componentSeries, totalSeries, socSeries } = useMemo(() => {
+    if (!data) return { componentSeries: [], totalSeries: [], socSeries: [] };
 
-  // Fetch data
-  const fetchData = useCallback(async () => {
-    if (!selectedGcp) return;
-    const company = findCompany(selectedGcp.id);
-    if (!company) return;
+    const series: ComponentSeries[] = data.powerComponents.map(pc => ({
+      componentId: pc.componentId,
+      displayName: pc.displayName,
+      type: pc.type,
+      data: pc.data,
+    }));
 
-    const now = new Date();
-    const dayStart = new Date(now);
-    dayStart.setHours(0, 0, 0, 0);
-
-    try {
-      const data = await monitoringApi.getLiveMetricsV2(
-        selectedGcp.id,
-        company.companyId,
-        dayStart.toISOString(),
-        now.toISOString(),
-      );
-      setRawMetrics(data);
-      setError(null);
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch metrics');
-    }
-  }, [selectedGcp, findCompany]);
-
-  // Initial load + polling
-  useEffect(() => {
-    setLoading(true);
-    setRawMetrics([]);
-    fetchData().finally(() => setLoading(false));
-
-    // Poll every 30s
-    if (pollingRef.current) clearInterval(pollingRef.current);
-    pollingRef.current = setInterval(fetchData, 30_000);
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
-  }, [fetchData]);
-
-  // Transform raw metrics into component series
-  const { componentSeries, totalSeries, socSeries, bapSeries } = useMemo(() => {
-    const compMap = new Map<string, MetricDataPoint[]>();
-    const soc: MetricDataPoint[] = [];
-    const bap: MetricDataPoint[] = [];
-
-    for (const m of rawMetrics) {
-      const pt: MetricDataPoint = { timestamp: m.timestamp, value: m.value };
-      if (m.type === 'SOC') {
-        soc.push(pt);
-      } else if (m.type === 'BAP') {
-        bap.push(pt);
-      } else if (m.type.includes('POWER')) {
-        // Match to component by nodeidentity
-        const matchedComp = selectedGcp?.components?.find(c =>
-          c.monitoring?.metrics?.some(x => {
-            if (!('nodeidentity' in x)) return false;
-            const tagUp = x.tag.toUpperCase();
-            return m.type === `${tagUp}_${x.nodeidentity}` || tagUp === m.type;
-          })
-        );
-        const key = matchedComp?.componentId || 'unknown';
-        if (!compMap.has(key)) compMap.set(key, []);
-        compMap.get(key)!.push(pt);
-      }
-    }
-
-    const series: ComponentSeries[] = [];
-    compMap.forEach((pts, compId) => {
-      const comp = selectedGcp?.components?.find(c => c.componentId === compId);
-      series.push({
-        componentId: compId,
-        displayName: comp?.displayName || compId,
-        type: comp?.type || 'OTHER',
-        data: pts.sort((a, b) => a.timestamp - b.timestamp),
-      });
-    });
-
-    // Also add BAP as a component series (BESS power)
-    if (bap.length > 0) {
+    if (data.batteryActivePower.length > 0) {
       const bessComp = selectedGcp?.components?.find(c => c.type === 'BESS');
       series.push({
         componentId: bessComp?.componentId || 'bap',
         displayName: bessComp?.displayName || 'Battery (BAP)',
         type: 'BESS',
-        data: bap.sort((a, b) => a.timestamp - b.timestamp),
+        data: data.batteryActivePower,
       });
     }
 
-    // Compute total = sum of all component power at each timestamp
     const tsMap = new Map<number, number>();
     for (const s of series) {
       for (const pt of s.data) {
@@ -163,12 +75,16 @@ export function LiveMonitoringWidget() {
     return {
       componentSeries: series,
       totalSeries: total,
-      socSeries: soc.sort((a, b) => a.timestamp - b.timestamp),
-      bapSeries: bap.sort((a, b) => a.timestamp - b.timestamp),
+      socSeries: data.batterySoc,
     };
-  }, [rawMetrics, selectedGcp]);
+  }, [data, selectedGcp]);
 
-  // ECharts option
+  const pointCount = useMemo(() => {
+    if (!data) return 0;
+    return data.batterySoc.length + data.batteryActivePower.length +
+      data.powerComponents.reduce((sum, pc) => sum + pc.data.length, 0);
+  }, [data]);
+
   const chartOption = useMemo<EChartsOption>(() => {
     const now = Date.now();
     const dayStart = new Date();
@@ -178,12 +94,12 @@ export function LiveMonitoringWidget() {
 
     const series: any[] = [];
 
-    // Component series
     componentSeries.forEach((cs, i) => {
       series.push({
         name: cs.displayName,
         type: 'line',
         smooth: 0.2,
+        sampling: 'lttb',
         data: cs.data.map(p => [p.timestamp, p.value]),
         color: COMPONENT_COLORS[i % COMPONENT_COLORS.length],
         lineStyle: { width: 2 },
@@ -192,12 +108,12 @@ export function LiveMonitoringWidget() {
       });
     });
 
-    // Total (GCP aggregate)
     if (totalSeries.length > 0 && componentSeries.length > 1) {
       series.push({
         name: `${selectedGcp?.name || 'GCP'} Total`,
         type: 'line',
         smooth: 0.2,
+        sampling: 'lttb',
         data: totalSeries.map(p => [p.timestamp, p.value]),
         color: TOTAL_COLOR,
         lineStyle: { width: 2.5, type: 'dashed' as const },
@@ -206,7 +122,6 @@ export function LiveMonitoringWidget() {
       });
     }
 
-    // SoC bars
     if (socSeries.length > 0) {
       series.push({
         name: 'SoC (MWh)',
@@ -223,7 +138,6 @@ export function LiveMonitoringWidget() {
       });
     }
 
-    // "Now" indicator on first power series
     if (series.length > 0 && !series[0].markLine) {
       series[0].markLine = {
         silent: true,
@@ -319,7 +233,6 @@ export function LiveMonitoringWidget() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* GCP Selector */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -352,26 +265,24 @@ export function LiveMonitoringWidget() {
             </option>
           ))}
         </select>
-        {loading && (
+        {isLoading && (
           <span style={{ fontSize: 10, color: '#a0a0b0' }}>Loading...</span>
         )}
-        {rawMetrics.length > 0 && (
+        {pointCount > 0 && (
           <span style={{ fontSize: 10, color: '#666', marginLeft: 'auto' }}>
-            {rawMetrics.length.toLocaleString()} pts
+            {pointCount.toLocaleString()} pts
           </span>
         )}
       </div>
 
-      {/* Error */}
       {error && (
         <div style={{ padding: '8px 10px', color: '#EF5350', fontSize: 11 }}>
           {error}
         </div>
       )}
 
-      {/* Chart */}
       <div style={{ flex: 1, minHeight: 0 }}>
-        {rawMetrics.length === 0 && !loading ? (
+        {pointCount === 0 && !isLoading ? (
           <div style={{
             display: 'flex',
             alignItems: 'center',
