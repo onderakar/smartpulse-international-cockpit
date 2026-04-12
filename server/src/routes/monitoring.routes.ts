@@ -29,6 +29,10 @@ export function createMonitoringRoutes(
         return res.status(404).json({ message: `Asset GCP_${gcpId} not found` });
       }
 
+      // Pre-load metric types (small table, avoids JOIN on large result set)
+      const metricTypes = await prisma.metricType.findMany();
+      const metricTypeMap = new Map(metricTypes.map(mt => [mt.id, mt.name.toUpperCase()]));
+
       const metrics = await prisma.timeSeriesData.findMany({
         where: {
           assetId: asset.id,
@@ -36,13 +40,13 @@ export function createMonitoringRoutes(
             ? { gt: new Date(start as string), lte: new Date(end as string) }
             : { gte: new Date(start as string), lte: new Date(end as string) },
         },
-        include: { metricType: true },
+        select: { effectiveTime: true, metricTypeId: true, value: true },
         orderBy: { effectiveTime: 'asc' },
       });
 
       let result = metrics.map((m: any) => ({
         timestamp: m.effectiveTime.getTime(),
-        type: m.metricType.name.toUpperCase(),
+        type: metricTypeMap.get(m.metricTypeId) || 'UNKNOWN',
         value: m.value,
       }));
 
