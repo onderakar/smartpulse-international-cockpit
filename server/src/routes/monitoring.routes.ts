@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { MonitoringAuthService } from '../services/monitoringAuth.service';
 import { MonitoringService } from '../services/monitoring.service';
 import { sessionAuth } from '../middleware/sessionAuth';
+import { lttbDownsample } from '../utils/lttb';
 
 const prisma = new PrismaClient();
 
@@ -15,10 +16,13 @@ export function createMonitoringRoutes(
   // GET /api/monitoring/v2/metrics
   router.get('/v2/metrics', sessionAuth, async (req, res, next) => {
     try {
-      const { gcpId, companyId, start, end } = req.query;
+      const { gcpId, companyId, start, end, maxPoints: maxPointsStr, mode } = req.query;
       if (!gcpId || !companyId || !start || !end) {
         return res.status(400).json({ message: 'gcpId, companyId, start, end required' });
       }
+
+      const maxPoints = maxPointsStr ? parseInt(maxPointsStr as string, 10) : 500;
+      const isIncremental = mode === 'incremental';
 
       const asset = await prisma.asset.findUnique({ where: { name: `GCP_${gcpId}` } });
       if (!asset) {
@@ -28,17 +32,44 @@ export function createMonitoringRoutes(
       const metrics = await prisma.timeSeriesData.findMany({
         where: {
           assetId: asset.id,
-          effectiveTime: { gte: new Date(start as string), lte: new Date(end as string) }
+          effectiveTime: isIncremental
+            ? { gt: new Date(start as string), lte: new Date(end as string) }
+            : { gte: new Date(start as string), lte: new Date(end as string) },
         },
         include: { metricType: true },
-        orderBy: { effectiveTime: 'asc' }
+        orderBy: { effectiveTime: 'asc' },
       });
 
-      const result = metrics.map((m: any) => ({
+      let result = metrics.map((m: any) => ({
         timestamp: m.effectiveTime.getTime(),
         type: m.metricType.name.toUpperCase(),
-        value: m.value
+        value: m.value,
       }));
+
+      // Apply LTTB in full mode when maxPoints > 0
+      if (!isIncremental && maxPoints > 0 && result.length > maxPoints) {
+        // Group by metric type
+        const groups = new Map<string, typeof result>();
+        for (const pt of result) {
+          if (!groups.has(pt.type)) groups.set(pt.type, []);
+          groups.get(pt.type)!.push(pt);
+        }
+
+        // LTTB per group
+        const downsampled: typeof result = [];
+        for (const [type, points] of groups) {
+          if (points.length > maxPoints) {
+            const lttbInput = points.map(p => ({ timestamp: p.timestamp, value: p.value }));
+            const sampled = lttbDownsample(lttbInput, maxPoints);
+            const sampledSet = new Set(sampled.map((s: any) => s.timestamp));
+            downsampled.push(...points.filter(p => sampledSet.has(p.timestamp)));
+          } else {
+            downsampled.push(...points);
+          }
+        }
+
+        result = downsampled.sort((a, b) => a.timestamp - b.timestamp);
+      }
 
       res.json(result);
     } catch (err) {
