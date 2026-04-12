@@ -39,6 +39,35 @@ const getSocketUrl = () => {
 const SOCKET_URL = getSocketUrl();
 
 // ---------------------------------------------------------------------------
+// Buffer utility
+// ---------------------------------------------------------------------------
+
+// Client-side simple downsampling (every-Nth) for buffer management
+function trimBuffer(metrics: RawMetricPoint[], maxPerType: number): RawMetricPoint[] {
+  const groups = new Map<string, RawMetricPoint[]>();
+  for (const m of metrics) {
+    if (!groups.has(m.type)) groups.set(m.type, []);
+    groups.get(m.type)!.push(m);
+  }
+
+  const result: RawMetricPoint[] = [];
+  for (const [, points] of groups) {
+    if (points.length > maxPerType) {
+      const step = Math.ceil(points.length / maxPerType);
+      const trimmed: RawMetricPoint[] = [points[0]];
+      for (let i = step; i < points.length - 1; i += step) {
+        trimmed.push(points[i]);
+      }
+      trimmed.push(points[points.length - 1]);
+      result.push(...trimmed);
+    } else {
+      result.push(...points);
+    }
+  }
+  return result.sort((a, b) => a.timestamp - b.timestamp);
+}
+
+// ---------------------------------------------------------------------------
 // Timezone helpers
 // ---------------------------------------------------------------------------
 
@@ -91,17 +120,21 @@ function computeNetPower(
 }
 
 /**
- * Fetch metrics from DB and transform into LiveMonitoringData.
+ * Fetch metrics from DB and transform into LiveMonitoringData + raw points.
  * Uses the GCP-based API (gcpId + companyId).
  */
 async function fetchAllMetricsV2(
   mapping: AssetMapping,
   startISO: string,
   endISO: string,
-): Promise<LiveMonitoringData> {
+  options?: { maxPoints?: number; mode?: 'full' | 'incremental' },
+): Promise<{ liveData: LiveMonitoringData; rawMetrics: RawMetricPoint[] }> {
   const gcp = getFirstGcp(mapping);
   if (!gcp) {
-    return { powerComponents: [], batterySoc: [], batteryActivePower: [], netPower: [] };
+    return {
+      liveData: { powerComponents: [], batterySoc: [], batteryActivePower: [], netPower: [] },
+      rawMetrics: [],
+    };
   }
 
   const companyMatch = mapping.companies?.find(c =>
@@ -109,15 +142,11 @@ async function fetchAllMetricsV2(
   );
   const companyId = companyMatch?.companyId ?? 0;
 
-  const rawMetrics = await monitoringApi.getLiveMetricsV2(gcp.id, companyId, startISO, endISO);
+  const rawMetrics = await monitoringApi.getLiveMetricsV2(gcp.id, companyId, startISO, endISO, options);
 
   const data: LiveMonitoringData = {
-    powerComponents: [],
-    batterySoc: [],
-    batteryActivePower: [],
-    netPower: [],
+    powerComponents: [], batterySoc: [], batteryActivePower: [], netPower: [],
   };
-
   const compMap = new Map<string, MetricDataPoint[]>();
 
   rawMetrics.forEach((m: RawMetricPoint) => {
@@ -127,7 +156,6 @@ async function fetchAllMetricsV2(
     } else if (m.type === 'BAP') {
       data.batteryActivePower.push(pt);
     } else if (m.type.includes('POWER')) {
-      // Match POWER_3054 → component with nodeidentity 3054
       const matchedComp = gcp.components?.find(c =>
         c.monitoring?.metrics?.some(x => {
           const tagUp = x.tag.toUpperCase();
@@ -136,7 +164,6 @@ async function fetchAllMetricsV2(
           return false;
         })
       );
-
       const key = matchedComp?.componentId || 'power_agg';
       const arr = compMap.get(key) || [];
       arr.push(pt);
@@ -158,12 +185,11 @@ async function fetchAllMetricsV2(
     });
   });
 
-  // Net power = sum of all renewable + battery
   const allComponentData = data.powerComponents.map(pc => pc.data);
   const totalRenewable = sumMetrics(allComponentData);
   data.netPower = computeNetPower(totalRenewable, data.batteryActivePower);
 
-  return data;
+  return { liveData: data, rawMetrics };
 }
 
 // ---------------------------------------------------------------------------
@@ -248,9 +274,15 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
+  // Incremental fetch state
+  const [rawMetricsBuffer, setRawMetricsBuffer] = useState<RawMetricPoint[]>([]);
+  const [lastTimestamp, setLastTimestamp] = useState<number | null>(null);
+
   // Reset on date change
   useEffect(() => {
     setData(emptyData);
+    setRawMetricsBuffer([]);
+    setLastTimestamp(null);
     setLastUpdated(null);
     setError(null);
   }, [dateKey, emptyData]);
@@ -267,20 +299,20 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
     return viewingToday ? now.toISOString() : new Date(dayStart + 24 * 60 * 60 * 1000).toISOString();
   }, [selectedDate, tz]);
 
-  // Load data from DB
-  const loadInitialData = useCallback(async () => {
+  // Full load — used on mount, date change, gap recovery
+  const loadFull = useCallback(async () => {
     if (!mapping || !gcp) return;
     setIsLoading(true);
     setError(null);
     try {
-      // Subscribe to WebSocket room for this GCP
-      if (socket) {
-        socket.emit('subscribe:asset', gcp.id);
-      }
+      if (socket) socket.emit('subscribe:asset', gcp.id);
 
       const endISO = getEndISO();
-      const newData = await fetchAllMetricsV2(mapping, startISO, endISO);
-      setData(newData);
+      const { liveData, rawMetrics } = await fetchAllMetricsV2(mapping, startISO, endISO, { maxPoints: 500, mode: 'full' });
+      setData(liveData);
+      setRawMetricsBuffer(rawMetrics);
+      const maxTs = rawMetrics.length > 0 ? Math.max(...rawMetrics.map(m => m.timestamp)) : null;
+      setLastTimestamp(maxTs);
       setLastUpdated(new Date());
     } catch (err: any) {
       setError(err instanceof Error ? err.message : String(err));
@@ -289,14 +321,107 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
     }
   }, [mapping, gcp, startISO, getEndISO, socket]);
 
+  // Incremental poll — appends new points
+  const pollIncremental = useCallback(async () => {
+    if (!mapping || !gcp || !lastTimestamp) {
+      return loadFull();
+    }
+    try {
+      const endISO = getEndISO();
+      const { rawMetrics: newPoints } = await fetchAllMetricsV2(
+        mapping,
+        new Date(lastTimestamp).toISOString(),
+        endISO,
+        { mode: 'incremental' },
+      );
+
+      // Gap recovery: if no new points and gap > 120s, full reload
+      const now = Date.now();
+      if (newPoints.length === 0 && (now - lastTimestamp) > 120_000) {
+        console.log('[MonitoringContext] Gap detected (>120s with no data), triggering full reload');
+        return loadFull();
+      }
+
+      if (newPoints.length > 0) {
+        setRawMetricsBuffer(prev => {
+          const merged = [...prev, ...newPoints];
+          // Buffer management: trim if any type exceeds 1500 points
+          const hasOversized = (() => {
+            const counts = new Map<string, number>();
+            for (const m of merged) counts.set(m.type, (counts.get(m.type) || 0) + 1);
+            return Array.from(counts.values()).some(c => c > 1500);
+          })();
+          return hasOversized ? trimBuffer(merged, 500) : merged;
+        });
+
+        const maxTs = Math.max(...newPoints.map(m => m.timestamp));
+        setLastTimestamp(maxTs);
+        setLastUpdated(new Date());
+      }
+    } catch (err: any) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [mapping, gcp, lastTimestamp, getEndISO, loadFull]);
+
+  // Rebuild LiveMonitoringData whenever rawMetricsBuffer changes
   useEffect(() => {
-    loadInitialData();
-  }, [loadInitialData]);
+    if (rawMetricsBuffer.length === 0 || !gcp) return;
+
+    const newData: LiveMonitoringData = {
+      powerComponents: [], batterySoc: [], batteryActivePower: [], netPower: [],
+    };
+    const compMap = new Map<string, MetricDataPoint[]>();
+
+    for (const m of rawMetricsBuffer) {
+      const pt: MetricDataPoint = { timestamp: m.timestamp, value: m.value };
+      if (m.type === 'SOC') {
+        newData.batterySoc.push(pt);
+      } else if (m.type === 'BAP') {
+        newData.batteryActivePower.push(pt);
+      } else if (m.type.includes('POWER')) {
+        const matchedComp = gcp.components?.find(c =>
+          c.monitoring?.metrics?.some(x => {
+            const tagUp = x.tag.toUpperCase();
+            if (tagUp === m.type) return true;
+            if ('nodeidentity' in x && x.nodeidentity && m.type === `${tagUp}_${x.nodeidentity}`) return true;
+            return false;
+          })
+        );
+        const key = matchedComp?.componentId || 'power_agg';
+        if (!compMap.has(key)) compMap.set(key, []);
+        compMap.get(key)!.push(pt);
+      }
+    }
+
+    compMap.forEach((pts, compId) => {
+      let cName = 'Aggregated Power';
+      if (compId !== 'power_agg') {
+        const c = gcp.components?.find(x => x.componentId === compId);
+        if (c) cName = c.displayName || cName;
+      }
+      newData.powerComponents.push({
+        componentId: compId,
+        displayName: cName,
+        type: gcp.components?.find(x => x.componentId === compId)?.type || 'OTHER',
+        data: pts.sort((a, b) => a.timestamp - b.timestamp),
+      });
+    });
+
+    const allComponentData = newData.powerComponents.map(pc => pc.data);
+    const totalRenewable = sumMetrics(allComponentData);
+    newData.netPower = computeNetPower(totalRenewable, newData.batteryActivePower);
+
+    setData(newData);
+  }, [rawMetricsBuffer, gcp]);
+
+  useEffect(() => {
+    loadFull();
+  }, [loadFull]);
 
   const pollingMs = (profile?.polling?.intervalSeconds ?? 60) * 1000;
 
   usePolling({
-    callback: loadInitialData,
+    callback: pollIncremental,
     intervalMs: pollingMs,
     enabled: !error?.includes('NOT_AUTHENTICATED') && !isLoading,
     immediate: false,
@@ -304,26 +429,19 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
 
   // WebSocket live stream listener
   useEffect(() => {
-    if (!socket || !isToday || !mapping) return;
+    if (!socket || !isToday) return;
 
     const handler = () => {
-      // On new metrics ingested, just refresh from DB
-      const endISO = getEndISO();
-      fetchAllMetricsV2(mapping, startISO, endISO).then(newData => {
-        setData(newData);
-        setLastUpdated(new Date());
-      }).catch(err => {
-        setError(err instanceof Error ? err.message : String(err));
-      });
+      pollIncremental();
     };
 
     socket.on('live_metrics', handler);
     return () => {
       socket.off('live_metrics', handler);
     };
-  }, [socket, isToday, mapping, startISO, getEndISO]);
+  }, [socket, isToday, pollIncremental]);
 
-  const refresh = useCallback(loadInitialData, [loadInitialData]);
+  const refresh = useCallback(loadFull, [loadFull]);
 
   const currentBapPowerMW = useMemo(() => {
     if (!data?.batteryActivePower?.length) return null;
@@ -360,7 +478,7 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
     const now = new Date();
     const tenMinAgo = new Date(now.getTime() - 10 * 60 * 1000);
     try {
-      const liveData = await fetchAllMetricsV2(mapping, tenMinAgo.toISOString(), now.toISOString());
+      const { liveData } = await fetchAllMetricsV2(mapping, tenMinAgo.toISOString(), now.toISOString());
       const lastBap = liveData.batteryActivePower.length > 0
         ? liveData.batteryActivePower[liveData.batteryActivePower.length - 1].value
         : null;
