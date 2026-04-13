@@ -4,6 +4,8 @@ import { MonitoringAuthService } from '../services/monitoringAuth.service';
 import { MonitoringService } from '../services/monitoring.service';
 import { sessionAuth } from '../middleware/sessionAuth';
 import { lttbDownsample } from '../utils/lttb';
+import { detectGapsAndBackfill } from '../services/gapDetection.service';
+import { ConfigStoreService } from '../services/configStore.service';
 
 const prisma = new PrismaClient();
 
@@ -76,6 +78,37 @@ export function createMonitoringRoutes(
       }
 
       res.json(result);
+
+      // Fire-and-forget gap detection (only for full mode)
+      if (!isIncremental && asset) {
+        const groupId = String(req.session?.portalSession?.groupId);
+        const store = new ConfigStoreService();
+
+        store.loadGroupProfile(groupId).then((profile: any) => {
+          if (!profile?.monitoringCredentials) return;
+
+          // Resolve timezone from asset mapping
+          let timezone = 'UTC';
+          const mapping = profile.assetMapping;
+          if (mapping?.companies) {
+            for (const co of mapping.companies) {
+              const gcp = co.gridConnectionPoints?.find((g: any) => String(g.id) === String(gcpId));
+              if (gcp) { timezone = gcp.timezone || co.timezone || 'UTC'; break; }
+            }
+          }
+
+          detectGapsAndBackfill({
+            assetName: `GCP_${gcpId}`,
+            assetId: asset.id,
+            gcpId: String(gcpId),
+            companyId: parseInt(companyId as string, 10),
+            start: start as string,
+            end: end as string,
+            timezone,
+            profile,
+          }).catch(err => console.error('[Monitoring Route] Gap detection error:', err.message));
+        }).catch(() => {});
+      }
     } catch (err) {
       next(err);
     }
