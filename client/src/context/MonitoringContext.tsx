@@ -441,6 +441,22 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
     };
   }, [socket, isToday, pollIncremental]);
 
+  // Reload on backfill completion (any date, not just today)
+  useEffect(() => {
+    if (!socket) return;
+
+    const handler = (payload: { gcpId: string; companyId: number; dateKey: string }) => {
+      const currentGcpId = gcp ? String(gcp.id) : null;
+      if (payload.gcpId === currentGcpId && payload.dateKey === dateKey) {
+        console.log('[MonitoringContext] Backfill complete, reloading data...');
+        loadFull();
+      }
+    };
+
+    socket.on('backfill_complete', handler);
+    return () => { socket.off('backfill_complete', handler); };
+  }, [socket, gcp, dateKey, loadFull]);
+
   const refresh = useCallback(loadFull, [loadFull]);
 
   const currentBapPowerMW = useMemo(() => {
