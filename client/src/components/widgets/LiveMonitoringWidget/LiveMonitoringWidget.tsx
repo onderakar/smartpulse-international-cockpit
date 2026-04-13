@@ -171,7 +171,7 @@ export function LiveMonitoringWidget() {
       series.push({
         name: cs.displayName,
         type: 'line',
-        smooth: 0.2,
+        step: 'end',
         sampling: 'lttb',
         data: cs.data.map(p => [p.timestamp, p.value]),
         color: TYPE_COLORS[cs.type] || COMPONENT_COLORS[i % COMPONENT_COLORS.length],
@@ -185,7 +185,7 @@ export function LiveMonitoringWidget() {
       series.push({
         name: `${selectedGcp?.name || 'GCP'} Total`,
         type: 'line',
-        smooth: 0.2,
+        step: 'end',
         sampling: 'lttb',
         data: totalSeries.map(p => [p.timestamp, p.value]),
         color: TOTAL_COLOR,
