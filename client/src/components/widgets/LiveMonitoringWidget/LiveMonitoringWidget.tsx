@@ -131,20 +131,33 @@ export function LiveMonitoringWidget() {
       });
     }
 
-    // Only sum timestamps where ALL components have data (avoid jagged total)
-    const seriesCount = series.length;
-    const tsCounts = new Map<number, number>();
-    const tsSum = new Map<number, number>();
-    for (const s of series) {
-      for (const pt of s.data) {
-        tsCounts.set(pt.timestamp, (tsCounts.get(pt.timestamp) || 0) + 1);
-        tsSum.set(pt.timestamp, (tsSum.get(pt.timestamp) || 0) + pt.value);
+    // Total: aggregate each series into 1-min buckets, then sum averages
+    const BUCKET = 60_000; // 1 minute
+    const bucketAvg = (pts: MetricDataPoint[]): Map<number, number> => {
+      const sums = new Map<number, number>();
+      const counts = new Map<number, number>();
+      for (const pt of pts) {
+        const b = Math.floor(pt.timestamp / BUCKET) * BUCKET;
+        sums.set(b, (sums.get(b) || 0) + pt.value);
+        counts.set(b, (counts.get(b) || 0) + 1);
+      }
+      const avg = new Map<number, number>();
+      for (const [b, s] of sums) avg.set(b, s / counts.get(b)!);
+      return avg;
+    };
+
+    const seriesAvgs = series.map(s => bucketAvg(s.data));
+    // Collect buckets where ALL series have data
+    const allBuckets = new Set<number>();
+    for (const avg of seriesAvgs) for (const b of avg.keys()) allBuckets.add(b);
+
+    const total: MetricDataPoint[] = [];
+    for (const b of allBuckets) {
+      if (seriesAvgs.every(a => a.has(b))) {
+        total.push({ timestamp: b, value: seriesAvgs.reduce((sum, a) => sum + a.get(b)!, 0) });
       }
     }
-    const total = Array.from(tsSum.entries())
-      .filter(([ts]) => tsCounts.get(ts) === seriesCount)
-      .map(([timestamp, value]) => ({ timestamp, value }))
-      .sort((a, b) => a.timestamp - b.timestamp);
+    total.sort((a, b) => a.timestamp - b.timestamp);
 
     return {
       componentSeries: series,
