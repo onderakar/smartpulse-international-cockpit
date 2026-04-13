@@ -31,7 +31,7 @@ const TYPE_COLORS: Record<string, string> = {
   CONSUMPTION: '#E91E63', // pink
   OTHER: '#78909C',    // grey
 };
-const TOTAL_COLOR = '#B0BEC5';
+const TOTAL_COLOR = '#FFFFFF';
 const IDM_Q_COLOR = '#26A69A'; // teal for quarter-hourly trades
 const IDM_H_COLOR = '#7E57C2'; // purple for hourly trades
 
@@ -184,7 +184,7 @@ export function LiveMonitoringWidget() {
         sampling: 'lttb',
         data: totalSeries.map(p => [p.timestamp, p.value]),
         color: TOTAL_COLOR,
-        lineStyle: { width: 2.5, type: 'dashed' as const },
+        lineStyle: { width: 2.5 },
         showSymbol: false,
         yAxisIndex: 0,
       });
