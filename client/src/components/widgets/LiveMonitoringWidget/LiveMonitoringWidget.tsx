@@ -47,6 +47,7 @@ export function LiveMonitoringWidget() {
 
   const allGcps = useMemo(() => getAllGcps(mapping), [mapping]);
 
+  const [selectedGcpId, setSelectedGcpId] = useState<number | null>(null);
   const gcpTimezone = useMemo(() => {
     if (!mapping?.companies) return 'UTC';
     for (const co of mapping.companies) {
@@ -55,7 +56,6 @@ export function LiveMonitoringWidget() {
     }
     return 'UTC';
   }, [mapping, selectedGcpId]);
-  const [selectedGcpId, setSelectedGcpId] = useState<number | null>(null);
   const [intervalMs, setIntervalMs] = useState(0);
   const legendSelectedRef = useRef<Record<string, boolean>>({});
 
