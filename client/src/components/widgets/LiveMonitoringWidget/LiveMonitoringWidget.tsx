@@ -7,8 +7,10 @@ import { useMonitoring } from '../../../context/MonitoringContext';
 import {
   getAllGcps,
 } from '@smartpulse-intl/shared';
-import type { MetricDataPoint } from '@smartpulse-intl/shared';
+import type { MetricDataPoint, AssetMapping } from '@smartpulse-intl/shared';
+import { DateNav } from '../../common/DateNav';
 import { aggregateByInterval } from '../../../utils/aggregateMetrics';
+import { timeSeriesApi, type TimeSeriesPoint } from '../../../api/timeSeries.api';
 
 const INTERVAL_OPTIONS = [
   { label: 'Raw', value: 0 },
@@ -18,6 +20,17 @@ const INTERVAL_OPTIONS = [
 
 const COMPONENT_COLORS = ['#29B6F6', '#FFB300', '#00BFA5', '#5C6BC0', '#FF7043', '#66BB6A', '#AB47BC', '#EF5350'];
 const TOTAL_COLOR = '#B0BEC5';
+const IDM_Q_COLOR = '#26A69A'; // teal for quarter-hourly trades
+const IDM_H_COLOR = '#7E57C2'; // purple for hourly trades
+
+/** Find companyId that owns a given GCP */
+function getCompanyIdForGcp(mapping: AssetMapping | null | undefined, gcpId: number): number | null {
+  if (!mapping?.companies) return null;
+  for (const c of mapping.companies) {
+    if (c.gridConnectionPoints?.some(g => g.id === gcpId)) return c.companyId;
+  }
+  return null;
+}
 
 interface ComponentSeries {
   componentId: string;
@@ -29,13 +42,26 @@ interface ComponentSeries {
 export function LiveMonitoringWidget() {
   const { profile } = useProfile();
   const { t } = useLocale();
-  const { data, isLoading, error } = useMonitoring();
+  const { data, isLoading, error, selectedDate, setSelectedDate } = useMonitoring();
   const mapping = profile?.assetMapping ?? null;
 
   const allGcps = useMemo(() => getAllGcps(mapping), [mapping]);
+
+  const gcpTimezone = useMemo(() => {
+    if (!mapping?.companies) return 'UTC';
+    for (const co of mapping.companies) {
+      const g = co.gridConnectionPoints?.find((g: any) => String(g.id) === String(selectedGcpId));
+      if (g) return g.timezone || co.timezone || 'UTC';
+    }
+    return 'UTC';
+  }, [mapping, selectedGcpId]);
   const [selectedGcpId, setSelectedGcpId] = useState<number | null>(null);
   const [intervalMs, setIntervalMs] = useState(0);
   const legendSelectedRef = useRef<Record<string, boolean>>({});
+
+  // IDM net position series (quarter-hourly and hourly)
+  const [idmQ, setIdmQ] = useState<MetricDataPoint[]>([]);
+  const [idmH, setIdmH] = useState<MetricDataPoint[]>([]);
 
   useEffect(() => {
     if (allGcps.length > 0 && selectedGcpId === null) {
@@ -45,6 +71,26 @@ export function LiveMonitoringWidget() {
       setSelectedGcpId(withMonitoring?.id ?? allGcps[0].id);
     }
   }, [allGcps, selectedGcpId]);
+
+  // Fetch IDM net position series for the selected GCP's company
+  const companyId = useMemo(() => getCompanyIdForGcp(mapping, selectedGcpId ?? -1), [mapping, selectedGcpId]);
+
+  useEffect(() => {
+    if (companyId == null) { setIdmQ([]); setIdmH([]); return; }
+    const today = new Date();
+    const dateStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
+    const dateEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString();
+
+    timeSeriesApi.getMultiSeries('COMPANY', String(companyId), ['idm_net_position_q', 'idm_net_position_h'], dateStart, dateEnd)
+      .then(result => {
+        const toMetric = (pts: TimeSeriesPoint[]): MetricDataPoint[] =>
+          pts.map(p => ({ timestamp: new Date(p.deliveryStart).getTime(), value: p.value }))
+            .sort((a, b) => a.timestamp - b.timestamp);
+        setIdmQ(toMetric(result['idm_net_position_q'] || []));
+        setIdmH(toMetric(result['idm_net_position_h'] || []));
+      })
+      .catch(() => { setIdmQ([]); setIdmH([]); });
+  }, [companyId]);
 
   const selectedGcp = useMemo(
     () => allGcps.find(g => g.id === selectedGcpId) ?? null,
@@ -98,10 +144,9 @@ export function LiveMonitoringWidget() {
 
   const chartOption = useMemo<EChartsOption>(() => {
     const now = Date.now();
-    const dayStart = new Date();
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date();
-    dayEnd.setHours(23, 59, 59, 999);
+    const dateStr = selectedDate.toLocaleDateString('en-CA', { timeZone: gcpTimezone });
+    const dayStartMs = new Date(`${dateStr}T00:00:00`).getTime();
+    const dayEndMs = dayStartMs + 24 * 60 * 60 * 1000 - 1;
 
     const series: any[] = [];
 
@@ -149,6 +194,41 @@ export function LiveMonitoringWidget() {
       });
     }
 
+    // IDM net position — stacked bars (quarter-hourly + hourly)
+    const idmBarWidth = 15 * 60 * 1000; // 15 min in ms
+    if (idmQ.length > 0) {
+      series.push({
+        name: t('idmNetPositionQ'),
+        type: 'bar',
+        stack: 'idm',
+        data: idmQ.map(p => [p.timestamp, p.value]),
+        yAxisIndex: 0,
+        barWidth: idmBarWidth,
+        itemStyle: {
+          color: IDM_Q_COLOR,
+          opacity: 0.6,
+          borderRadius: [0, 0, 0, 0],
+        },
+        z: 1,
+      });
+    }
+    if (idmH.length > 0) {
+      series.push({
+        name: t('idmNetPositionH'),
+        type: 'bar',
+        stack: 'idm',
+        data: idmH.map(p => [p.timestamp, p.value]),
+        yAxisIndex: 0,
+        barWidth: idmBarWidth,
+        itemStyle: {
+          color: IDM_H_COLOR,
+          opacity: 0.6,
+          borderRadius: [1, 1, 0, 0],
+        },
+        z: 1,
+      });
+    }
+
     if (series.length > 0 && !series[0].markLine) {
       series[0].markLine = {
         silent: true,
@@ -175,6 +255,7 @@ export function LiveMonitoringWidget() {
           const time = new Date(params[0].value[0]).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
           let html = `<div style="font-weight:600;margin-bottom:4px">${time}</div>`;
           for (const p of params) {
+            if (p.value[1] == null) continue;
             const val = typeof p.value[1] === 'number' ? p.value[1].toFixed(3) : p.value[1];
             const unit = p.seriesName?.includes('SoC') ? 'MWh' : 'MW';
             html += `<div>${p.marker} ${p.seriesName}: <b>${val}</b> ${unit}</div>`;
@@ -193,8 +274,8 @@ export function LiveMonitoringWidget() {
       },
       xAxis: {
         type: 'time',
-        min: dayStart.getTime(),
-        max: dayEnd.getTime(),
+        min: dayStartMs,
+        max: dayEndMs,
         axisLine: { lineStyle: { color: '#2a2a3e' } },
         axisLabel: {
           color: '#a0a0b0',
@@ -241,7 +322,7 @@ export function LiveMonitoringWidget() {
       ],
       series,
     };
-  }, [componentSeries, totalSeries, socSeries, selectedGcp]);
+  }, [componentSeries, totalSeries, socSeries, selectedGcp, idmQ, idmH, t, selectedDate, gcpTimezone]);
 
   const onChartEvents = useMemo(() => ({
     legendselectchanged: (e: any) => {
@@ -261,6 +342,12 @@ export function LiveMonitoringWidget() {
         borderBottom: '1px solid var(--color-border, rgba(255,255,255,0.1))',
         flexShrink: 0,
       }}>
+        <DateNav
+          selectedDate={selectedDate}
+          onDateChange={setSelectedDate}
+          timezone={gcpTimezone}
+        />
+        <div style={{ width: 1, height: 18, background: 'var(--color-border, rgba(255,255,255,0.15))' }} />
         <label style={{ fontSize: 11, color: 'var(--color-text-muted, #a0a0b0)', whiteSpace: 'nowrap' }}>
           GCP:
         </label>
@@ -276,7 +363,7 @@ export function LiveMonitoringWidget() {
             padding: '3px 6px',
             fontSize: 12,
             outline: 'none',
-            maxWidth: 260,
+            maxWidth: 220,
           }}
         >
           {allGcps.map(gcp => (
