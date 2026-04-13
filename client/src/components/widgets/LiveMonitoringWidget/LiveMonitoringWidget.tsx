@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
 import { useProfile } from '../../../context/ProfileContext';
@@ -8,6 +8,13 @@ import {
   getAllGcps,
 } from '@smartpulse-intl/shared';
 import type { MetricDataPoint } from '@smartpulse-intl/shared';
+import { aggregateByInterval } from '../../../utils/aggregateMetrics';
+
+const INTERVAL_OPTIONS = [
+  { label: 'Raw', value: 0 },
+  { label: '5m', value: 300_000 },
+  { label: '15m', value: 900_000 },
+] as const;
 
 const COMPONENT_COLORS = ['#29B6F6', '#FFB300', '#00BFA5', '#5C6BC0', '#FF7043', '#66BB6A', '#AB47BC', '#EF5350'];
 const TOTAL_COLOR = '#B0BEC5';
@@ -27,6 +34,8 @@ export function LiveMonitoringWidget() {
 
   const allGcps = useMemo(() => getAllGcps(mapping), [mapping]);
   const [selectedGcpId, setSelectedGcpId] = useState<number | null>(null);
+  const [intervalMs, setIntervalMs] = useState(0);
+  const legendSelectedRef = useRef<Record<string, boolean>>({});
 
   useEffect(() => {
     if (allGcps.length > 0 && selectedGcpId === null) {
@@ -45,11 +54,13 @@ export function LiveMonitoringWidget() {
   const { componentSeries, totalSeries, socSeries } = useMemo(() => {
     if (!data) return { componentSeries: [], totalSeries: [], socSeries: [] };
 
+    const agg = (pts: MetricDataPoint[]) => aggregateByInterval(pts, intervalMs);
+
     const series: ComponentSeries[] = data.powerComponents.map(pc => ({
       componentId: pc.componentId,
       displayName: pc.displayName,
       type: pc.type,
-      data: pc.data,
+      data: agg(pc.data),
     }));
 
     if (data.batteryActivePower.length > 0) {
@@ -58,7 +69,7 @@ export function LiveMonitoringWidget() {
         componentId: bessComp?.componentId || 'bap',
         displayName: bessComp?.displayName || 'Battery (BAP)',
         type: 'BESS',
-        data: data.batteryActivePower,
+        data: agg(data.batteryActivePower),
       });
     }
 
@@ -75,9 +86,9 @@ export function LiveMonitoringWidget() {
     return {
       componentSeries: series,
       totalSeries: total,
-      socSeries: data.batterySoc,
+      socSeries: agg(data.batterySoc),
     };
-  }, [data, selectedGcp]);
+  }, [data, selectedGcp, intervalMs]);
 
   const pointCount = useMemo(() => {
     if (!data) return 0;
@@ -178,6 +189,7 @@ export function LiveMonitoringWidget() {
         icon: 'roundRect',
         itemWidth: 14,
         itemHeight: 3,
+        selected: { ...legendSelectedRef.current },
       },
       xAxis: {
         type: 'time',
@@ -231,6 +243,14 @@ export function LiveMonitoringWidget() {
     };
   }, [componentSeries, totalSeries, socSeries, selectedGcp]);
 
+  const onChartEvents = useMemo(() => ({
+    legendselectchanged: (e: any) => {
+      if (e.selected) {
+        legendSelectedRef.current = { ...e.selected };
+      }
+    },
+  }), []);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div style={{
@@ -265,11 +285,32 @@ export function LiveMonitoringWidget() {
             </option>
           ))}
         </select>
+        <div style={{ display: 'flex', gap: 2, marginLeft: 'auto' }}>
+          {INTERVAL_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setIntervalMs(opt.value)}
+              style={{
+                padding: '2px 7px',
+                fontSize: 10,
+                border: '1px solid',
+                borderColor: intervalMs === opt.value ? 'var(--color-accent, #4fc3f7)' : 'var(--color-border, rgba(255,255,255,0.15))',
+                borderRadius: 3,
+                background: intervalMs === opt.value ? 'rgba(79, 195, 247, 0.15)' : 'transparent',
+                color: intervalMs === opt.value ? 'var(--color-accent, #4fc3f7)' : 'var(--color-text-muted, #a0a0b0)',
+                cursor: 'pointer',
+                lineHeight: '16px',
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
         {isLoading && (
           <span style={{ fontSize: 10, color: '#a0a0b0' }}>Loading...</span>
         )}
         {pointCount > 0 && (
-          <span style={{ fontSize: 10, color: '#666', marginLeft: 'auto' }}>
+          <span style={{ fontSize: 10, color: '#666' }}>
             {pointCount.toLocaleString()} pts
           </span>
         )}
@@ -299,6 +340,7 @@ export function LiveMonitoringWidget() {
             style={{ width: '100%', height: '100%' }}
             opts={{ renderer: 'canvas' }}
             notMerge={true}
+            onEvents={onChartEvents}
           />
         )}
       </div>
