@@ -19,6 +19,18 @@ const INTERVAL_OPTIONS = [
 ] as const;
 
 const COMPONENT_COLORS = ['#29B6F6', '#FFB300', '#00BFA5', '#5C6BC0', '#FF7043', '#66BB6A', '#AB47BC', '#EF5350'];
+
+/** Fixed colors by component type */
+const TYPE_COLORS: Record<string, string> = {
+  BESS: '#29B6F6',     // blue
+  SOLAR: '#FF9800',    // orange
+  WIND: '#4CAF50',     // green
+  HYDRO: '#00BCD4',    // cyan
+  THERMAL: '#FF5722',  // deep orange
+  LOAD: '#9C27B0',     // purple
+  CONSUMPTION: '#E91E63', // pink
+  OTHER: '#78909C',    // grey
+};
 const TOTAL_COLOR = '#B0BEC5';
 const IDM_Q_COLOR = '#26A69A'; // teal for quarter-hourly trades
 const IDM_H_COLOR = '#7E57C2'; // purple for hourly trades
@@ -157,7 +169,7 @@ export function LiveMonitoringWidget() {
         smooth: 0.2,
         sampling: 'lttb',
         data: cs.data.map(p => [p.timestamp, p.value]),
-        color: COMPONENT_COLORS[i % COMPONENT_COLORS.length],
+        color: TYPE_COLORS[cs.type] || COMPONENT_COLORS[i % COMPONENT_COLORS.length],
         lineStyle: { width: 2 },
         showSymbol: false,
         yAxisIndex: 0,
