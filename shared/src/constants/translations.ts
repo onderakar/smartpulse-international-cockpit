@@ -284,6 +284,10 @@ const T = {
   'assetMapping.metrics': { tr: 'Metrikler', en: 'Metrics' },
   'assetMapping.addMetric': { tr: '+ Metrik Ekle', en: '+ Add Metric' },
   'assetMapping.noMetrics': { tr: 'Metrik tanimlanmamis.', en: 'No metrics mapped.' },
+  'assetMapping.testMetric': { tr: 'Test Et', en: 'Test' },
+  'assetMapping.testSuccess': { tr: 'Basarili', en: 'Success' },
+  'assetMapping.testPoints': { tr: 'veri noktasi', en: 'data point(s)' },
+  'assetMapping.testFailed': { tr: 'Basarisiz', en: 'Failed' },
   'assetMapping.metricType': { tr: 'Metrik Tipi', en: 'Metric Type' },
   'assetMapping.customLabel': { tr: 'Ozel Etiket', en: 'Custom Label' },
   'assetMapping.nodeName': { tr: 'Node Adi', en: 'Node Name' },
@@ -336,6 +340,14 @@ const T = {
   'cache.details': { tr: 'Detaylar', en: 'Details' },
   'cache.points': { tr: 'nokta', en: 'points' },
   'cache.cached': { tr: 'onbellege alindi', en: 'cached' },
+
+  // ==================== Energy Flow Widget ====================
+  'energyFlow.title': { tr: 'Enerji Akis', en: 'Energy Flow' },
+  'energyFlow.battery': { tr: 'Batarya', en: 'Battery' },
+  'energyFlow.grid': { tr: 'Sebeke', en: 'Grid' },
+  'energyFlow.gridExport': { tr: 'Sebeke Veris', en: 'Grid Export' },
+  'energyFlow.gridImport': { tr: 'Sebeke Cekis', en: 'Grid Import' },
+  'energyFlow.noRenewables': { tr: 'Yenilenebilir yok', en: 'No renewables' },
 
   // ==================== GQL Test Config ====================
   'gql.title': { tr: 'GraphQL Baglantisi', en: 'GraphQL Connection' },
@@ -580,6 +592,8 @@ const T = {
   'widget.damTrade':               { tr: 'DAM Trade (MW)', en: 'DAM Trade (MW)' },
   'widget.genForecast':            { tr: 'Üretim Tahmini (MW)', en: 'Generation Forecast (MW)' },
   'widget.idmNetPos':              { tr: 'IDM Net Pozisyon (MW)', en: 'IDM Net Position (MW)' },
+  'idmNetPositionQ':               { tr: 'IDM Çeyreklik', en: 'IDM Quarterly' },
+  'idmNetPositionH':               { tr: 'IDM Saatlik', en: 'IDM Hourly' },
 
   // ==================== Intraday Report Page ====================
   'intradayReport.title':          { tr: 'Intraday İşlem Raporu', en: 'Intraday Transaction Report' },
