@@ -59,5 +59,9 @@ export function setupWebSocket(server: HttpServer) {
         io.to(`files:${payload.groupId}`).emit('file:updated', payload);
     });
 
+    eventBus.on(EVENTS.BACKFILL_COMPLETE, (payload: { assetId: number; gcpId: string; companyId: number; dateKey: string }) => {
+        io.to(`asset:${payload.assetId}`).emit('backfill_complete', payload);
+    });
+
     return io;
 }
