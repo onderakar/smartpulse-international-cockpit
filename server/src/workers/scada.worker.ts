@@ -234,9 +234,10 @@ export class ScadaWorker {
         start: string;
         end: string;
         profile: any;
-    }) {
+    }): Promise<number> {
         const { gcpId, companyId, start, end, profile } = params;
         const worker = new ScadaWorker();
+        let totalIngested = 0;
 
         const targets = new Map<string, any>();
 
@@ -245,7 +246,7 @@ export class ScadaWorker {
         );
         if (!companyMatch) {
             console.warn(`[ScadaWorker Adhoc] No company match for companyId=${companyId}`);
-            return;
+            return totalIngested;
         }
 
         const gcp = companyMatch.gridConnectionPoints?.find((g: any) =>
@@ -253,7 +254,7 @@ export class ScadaWorker {
         );
         if (!gcp) {
             console.warn(`[ScadaWorker Adhoc] No GCP match for gcpId=${gcpId} in company ${companyMatch.companyName}`);
-            return;
+            return totalIngested;
         }
 
         const extractedMasternode = gcp.components?.[0]?.monitoring?.masternode;
@@ -291,7 +292,7 @@ export class ScadaWorker {
 
         if (targets.size === 0) {
             console.warn(`[ScadaWorker Adhoc] No targets found for GCP "${gcp.name}".`);
-            return;
+            return totalIngested;
         }
         console.log(`[ScadaWorker Adhoc] ${targets.size} target(s) to refetch`);
 
@@ -322,13 +323,16 @@ export class ScadaWorker {
                         start: new Date(chunkStart).toISOString(),
                         end: new Date(chunkEnd).toISOString()
                     });
-                    await worker.ingestData(data, t, mTypesMap, scadaSource.id);
+                    const ingested = await worker.ingestData(data, t, mTypesMap, scadaSource.id);
+                    totalIngested += ingested;
                     chunkStart = chunkEnd;
                 }
             } catch (err: any) {
                 console.error(`[ScadaWorker Adhoc] Error fetching ${key}:`, err.message);
             }
         }
+
+        return totalIngested;
     }
 
     private tokenCache = new Map<string, { token: string, expiresAt: number }>();
@@ -480,17 +484,17 @@ export class ScadaWorker {
         }
     }
 
-    private async ingestData(payload: any, target: any, metricTypes: Map<string, number>, sourceId: number) {
+    private async ingestData(payload: any, target: any, metricTypes: Map<string, number>, sourceId: number): Promise<number> {
         if (!payload) {
             console.log(`[ScadaWorker] Ignoring null payload from ${target.assetName}.`);
-            return;
+            return 0;
         }
 
         console.log(`[ScadaWorker] Raw Payload Snapshot for ${target.assetName}:`, JSON.stringify(payload).substring(0, 800));
 
         if (!payload.values && !payload.data && !payload.soc) {
             console.log(`[ScadaWorker] Empty/Invalid payload keys from ${target.assetName}.`);
-            return;
+            return 0;
         }
 
         // Ensure Asset exists — use GCP_{gcpId} naming
@@ -655,14 +659,18 @@ export class ScadaWorker {
                     });
                     console.log(`[ScadaWorker] Inserted ${result.count} NEW metrics out of ${recordsToInsert.length} for ${target.assetName}.`);
                     eventBus.emit(EVENTS.METRICS_INGESTED, { assetId: target.gcpId });
+                    return result.count;
                 } else {
                     console.log(`[ScadaWorker] All ${recordsToInsert.length} metrics for ${target.assetName} already exist (deduplicated).`);
+                    return 0;
                 }
             } catch (err: any) {
                 console.error(`[ScadaWorker] DB Insert failed for ${target.assetName}:`, err.message);
+                return 0;
             }
         } else {
             console.log(`[ScadaWorker] No valid metrics extracted for ${target.assetName}.`);
+            return 0;
         }
     }
 }
