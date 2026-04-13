@@ -131,15 +131,34 @@ export function LiveMonitoringWidget() {
       });
     }
 
-    const tsMap = new Map<number, number>();
+    // Build union of all timestamps, then interpolate each series
+    // so every component contributes to every total point
+    const allTsSet = new Set<number>();
     for (const s of series) {
-      for (const pt of s.data) {
-        tsMap.set(pt.timestamp, (tsMap.get(pt.timestamp) || 0) + pt.value);
-      }
+      for (const pt of s.data) allTsSet.add(pt.timestamp);
     }
-    const total = Array.from(tsMap.entries())
-      .map(([timestamp, value]) => ({ timestamp, value }))
-      .sort((a, b) => a.timestamp - b.timestamp);
+    const allTs = Array.from(allTsSet).sort((a, b) => a - b);
+
+    /** Linear interpolation lookup for a sorted series at a given timestamp */
+    function interpAt(pts: MetricDataPoint[], ts: number): number {
+      if (pts.length === 0) return 0;
+      // Binary search for insertion point
+      let lo = 0, hi = pts.length - 1;
+      if (ts <= pts[lo].timestamp) return pts[lo].value;
+      if (ts >= pts[hi].timestamp) return pts[hi].value;
+      while (lo < hi - 1) {
+        const mid = (lo + hi) >> 1;
+        if (pts[mid].timestamp <= ts) lo = mid; else hi = mid;
+      }
+      const p0 = pts[lo], p1 = pts[hi];
+      const t = (ts - p0.timestamp) / (p1.timestamp - p0.timestamp);
+      return p0.value + t * (p1.value - p0.value);
+    }
+
+    const total = allTs.map(ts => ({
+      timestamp: ts,
+      value: series.reduce((sum, s) => sum + interpAt(s.data, ts), 0),
+    }));
 
     return {
       componentSeries: series,
