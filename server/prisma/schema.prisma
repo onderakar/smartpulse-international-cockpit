@@ -225,3 +225,17 @@ model IntradayTransaction {
   @@index([groupId, companyId, deliveryStart]) // company + date queries
   @@index([groupId, deliveryStart])            // date range queries
 }
+
+// ── Gap Detection ──
+
+model BackfillAttempt {
+  id          Int      @id @default(autoincrement())
+  assetName   String
+  rangeStart  DateTime
+  rangeEnd    DateTime
+  attemptedAt DateTime @default(now())
+  pointsFound Int      @default(0)
+
+  @@index([assetName, attemptedAt])
+  @@index([assetName, rangeStart, rangeEnd])
+}
