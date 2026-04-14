@@ -178,7 +178,7 @@ export function LiveMonitoringWidget() {
         type: 'line',
         data: socSeries.map(p => [p.timestamp, p.value]),
         yAxisIndex: 1,
-        smooth: 0.2,
+        step: 'end',
         showSymbol: false,
         lineStyle: { width: 1.5, color: 'rgba(76, 175, 80, 0.6)' },
         areaStyle: { color: 'rgba(76, 175, 80, 0.08)' },
