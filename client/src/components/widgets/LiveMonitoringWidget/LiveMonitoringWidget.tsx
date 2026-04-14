@@ -10,7 +10,6 @@ import {
 import type { MetricDataPoint, AssetMapping } from '@smartpulse-intl/shared';
 import { DateNav } from '../../common/DateNav';
 import { aggregateByInterval } from '../../../utils/aggregateMetrics';
-import { timeSeriesApi, type TimeSeriesPoint } from '../../../api/timeSeries.api';
 
 const INTERVAL_OPTIONS = [
   { label: 'Raw', value: 0 },
@@ -32,17 +31,6 @@ const TYPE_COLORS: Record<string, string> = {
   OTHER: '#78909C',    // grey
 };
 const TOTAL_COLOR = '#FFFFFF';
-const IDM_Q_COLOR = '#26A69A'; // teal for quarter-hourly trades
-const IDM_H_COLOR = '#7E57C2'; // purple for hourly trades
-
-/** Find companyId that owns a given GCP */
-function getCompanyIdForGcp(mapping: AssetMapping | null | undefined, gcpId: number): number | null {
-  if (!mapping?.companies) return null;
-  for (const c of mapping.companies) {
-    if (c.gridConnectionPoints?.some(g => g.id === gcpId)) return c.companyId;
-  }
-  return null;
-}
 
 interface ComponentSeries {
   componentId: string;
@@ -71,10 +59,6 @@ export function LiveMonitoringWidget() {
   const [intervalMs, setIntervalMs] = useState(0);
   const legendSelectedRef = useRef<Record<string, boolean>>({});
 
-  // IDM net position series (quarter-hourly and hourly)
-  const [idmQ, setIdmQ] = useState<MetricDataPoint[]>([]);
-  const [idmH, setIdmH] = useState<MetricDataPoint[]>([]);
-
   useEffect(() => {
     if (allGcps.length > 0 && selectedGcpId === null) {
       const withMonitoring = allGcps.find(g =>
@@ -83,26 +67,6 @@ export function LiveMonitoringWidget() {
       setSelectedGcpId(withMonitoring?.id ?? allGcps[0].id);
     }
   }, [allGcps, selectedGcpId]);
-
-  // Fetch IDM net position series for the selected GCP's company
-  const companyId = useMemo(() => getCompanyIdForGcp(mapping, selectedGcpId ?? -1), [mapping, selectedGcpId]);
-
-  useEffect(() => {
-    if (companyId == null) { setIdmQ([]); setIdmH([]); return; }
-    const today = new Date();
-    const dateStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-    const dateEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString();
-
-    timeSeriesApi.getMultiSeries('COMPANY', String(companyId), ['idm_net_position_q', 'idm_net_position_h'], dateStart, dateEnd)
-      .then(result => {
-        const toMetric = (pts: TimeSeriesPoint[]): MetricDataPoint[] =>
-          pts.map(p => ({ timestamp: new Date(p.deliveryStart).getTime(), value: p.value }))
-            .sort((a, b) => a.timestamp - b.timestamp);
-        setIdmQ(toMetric(result['idm_net_position_q'] || []));
-        setIdmH(toMetric(result['idm_net_position_h'] || []));
-      })
-      .catch(() => { setIdmQ([]); setIdmH([]); });
-  }, [companyId]);
 
   const selectedGcp = useMemo(
     () => allGcps.find(g => g.id === selectedGcpId) ?? null,
@@ -223,41 +187,6 @@ export function LiveMonitoringWidget() {
       });
     }
 
-    // IDM net position — stacked bars (quarter-hourly + hourly)
-    const idmBarWidth = 15 * 60 * 1000; // 15 min in ms
-    if (idmQ.length > 0) {
-      series.push({
-        name: t('idmNetPositionQ'),
-        type: 'bar',
-        stack: 'idm',
-        data: idmQ.map(p => [p.timestamp, p.value]),
-        yAxisIndex: 0,
-        barWidth: idmBarWidth,
-        itemStyle: {
-          color: IDM_Q_COLOR,
-          opacity: 0.6,
-          borderRadius: [0, 0, 0, 0],
-        },
-        z: 1,
-      });
-    }
-    if (idmH.length > 0) {
-      series.push({
-        name: t('idmNetPositionH'),
-        type: 'bar',
-        stack: 'idm',
-        data: idmH.map(p => [p.timestamp, p.value]),
-        yAxisIndex: 0,
-        barWidth: idmBarWidth,
-        itemStyle: {
-          color: IDM_H_COLOR,
-          opacity: 0.6,
-          borderRadius: [1, 1, 0, 0],
-        },
-        z: 1,
-      });
-    }
-
     if (series.length > 0 && !series[0].markLine) {
       series[0].markLine = {
         silent: true,
@@ -352,7 +281,7 @@ export function LiveMonitoringWidget() {
       ],
       series,
     };
-  }, [componentSeries, totalSeries, socSeries, selectedGcp, idmQ, idmH, t, selectedDate, gcpTimezone]);
+  }, [componentSeries, totalSeries, socSeries, selectedGcp, t, selectedDate, gcpTimezone]);
 
   const onChartEvents = useMemo(() => ({
     legendselectchanged: (e: any) => {
