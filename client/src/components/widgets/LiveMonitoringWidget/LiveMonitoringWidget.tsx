@@ -211,14 +211,13 @@ export function LiveMonitoringWidget() {
     if (socSeries.length > 0) {
       series.push({
         name: 'SoC (MWh)',
-        type: 'bar',
+        type: 'line',
         data: socSeries.map(p => [p.timestamp, p.value]),
         yAxisIndex: 1,
-        barWidth: '80%',
-        itemStyle: {
-          color: 'rgba(76, 175, 80, 0.2)',
-          borderRadius: [1, 1, 0, 0],
-        },
+        smooth: 0.2,
+        showSymbol: false,
+        lineStyle: { width: 1.5, color: 'rgba(76, 175, 80, 0.6)' },
+        areaStyle: { color: 'rgba(76, 175, 80, 0.08)' },
         silent: true,
         z: 0,
       });
@@ -330,6 +329,7 @@ export function LiveMonitoringWidget() {
           type: 'value',
           position: 'right',
           name: 'MWh',
+          min: 0,
           nameTextStyle: { color: '#a0a0b0', fontSize: 10 },
           axisLine: { show: true, lineStyle: { color: '#2a2a3e' } },
           axisLabel: { color: '#a0a0b0', fontSize: 11 },
