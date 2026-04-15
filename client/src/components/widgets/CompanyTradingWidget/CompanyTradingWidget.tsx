@@ -84,19 +84,21 @@ export function CompanyTradingWidget({ selectedDate, onDateChange }: Props) {
     const forecast = seriesData.generation_forecast ?? [];
     const idmNet = seriesData.idm_net_position ?? [];
 
-    // Build shared category labels from all series so every data point aligns
-    const allTimestamps = new Set<string>();
-    [damTrade, forecast, idmNet].forEach(arr =>
-      arr.forEach(p => allTimestamps.add(p.deliveryStart)),
-    );
-    const categories = Array.from(allTimestamps).sort();
+    // Always generate all 96 MTU slots (00:00–23:45) based on the selected delivery date
+    const categories: string[] = [];
+    for (let i = 0; i < 96; i++) {
+      const d = new Date(selectedDate);
+      d.setHours(0, 0, 0, 0);
+      d.setMinutes(i * 15);
+      categories.push(d.toISOString());
+    }
     const formatLabel = (iso: string) => {
       const d = new Date(iso);
       return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     };
 
     const toAligned = (points: TimeSeriesPoint[]) => {
-      const map = new Map(points.map(p => [p.deliveryStart, p.value]));
+      const map = new Map(points.map(p => [new Date(p.deliveryStart).toISOString(), p.value]));
       return categories.map(ts => map.get(ts) ?? null);
     };
 

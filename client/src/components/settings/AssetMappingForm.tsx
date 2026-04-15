@@ -12,6 +12,7 @@ import {
 import { ExtensionAttributes } from '@shared/types/attributes.types';
 import { getDefinitionsForScope, mergeDefinitions } from '@shared/constants/attributeDefinitions';
 import { configApi } from '../../api/config.api';
+import { monitoringApi } from '../../api/monitoring.api';
 
 export function AssetMappingForm() {
   const { profile, updateProfile } = useProfile();
@@ -509,6 +510,8 @@ interface ComponentEditorProps {
 function ComponentEditor({ comp, companyPlantIds, excludePlantIds, allDefs, onChange, onRemove }: ComponentEditorProps) {
   const { t } = useLocale();
   const [expanded, setExpanded] = useState(false);
+  const [testingIdx, setTestingIdx] = useState<number | null>(null);
+  const [testResult, setTestResult] = useState<{ idx: number; success: boolean; count?: number; sample?: any; error?: string } | null>(null);
 
   const handleForecastChange = (field: string, value: any) => {
     onChange({ forecastPreference: { ...comp.forecastPreference, [field]: value } });
@@ -728,6 +731,7 @@ function ComponentEditor({ comp, companyPlantIds, excludePlantIds, allDefs, onCh
               </div>
 
               {!('source' in metric) && (
+                <>
                 <div className="flex gap-4">
                   <div className="flex-[2]">
                     <label className="block text-xs font-semibold text-gray-400 mb-1">{t('assetMapping.nodeName')}</label>
@@ -757,6 +761,50 @@ function ComponentEditor({ comp, companyPlantIds, excludePlantIds, allDefs, onCh
                     />
                   </div>
                 </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={testingIdx === mIdx || !comp.monitoring?.masternode || !('node' in metric && metric.node)}
+                    onClick={async () => {
+                      setTestingIdx(mIdx);
+                      setTestResult(null);
+                      try {
+                        const res = await monitoringApi.testMetric(
+                          comp.monitoring!.masternode,
+                          (metric as LabeledMetricMapping).node,
+                          (metric as LabeledMetricMapping).nodeidentity,
+                        );
+                        setTestResult({ idx: mIdx, success: res.success, count: res.count, sample: res.sample });
+                      } catch (err: any) {
+                        setTestResult({ idx: mIdx, success: false, error: err?.response?.data?.message || err?.message || 'Failed' });
+                      } finally {
+                        setTestingIdx(null);
+                      }
+                    }}
+                    className="px-3 py-1 text-xs rounded bg-dark-700 border border-gray-600 text-gray-300 hover:bg-dark-600 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {testingIdx === mIdx ? t('common.loading') : t('assetMapping.testMetric')}
+                  </button>
+                  {testResult && testResult.idx === mIdx && (
+                    <button onClick={() => setTestResult(null)} className="text-gray-500 hover:text-gray-300 text-xs">&#x2715;</button>
+                  )}
+                </div>
+
+                {testResult && testResult.idx === mIdx && (
+                  <div className={`rounded border p-2 text-xs ${testResult.success ? 'border-green-700 bg-green-900/20 text-green-300' : 'border-red-700 bg-red-900/20 text-red-300'}`}>
+                    {testResult.success ? (
+                      <>
+                        <div className="font-semibold mb-1">{t('assetMapping.testSuccess')} — {testResult.count} {t('assetMapping.testPoints')}</div>
+                        {testResult.sample && (
+                          <pre className="text-[10px] text-gray-400 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(testResult.sample, null, 2)}</pre>
+                        )}
+                      </>
+                    ) : (
+                      <div>{t('assetMapping.testFailed')}: {testResult.error}</div>
+                    )}
+                  </div>
+                )}
+                </>
               )}
             </div>
           ))}
