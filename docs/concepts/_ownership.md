@@ -24,7 +24,7 @@
 | **PollingConfig** | [profile/data-models.md](profile/data-models.md) | monitoring |
 | **MetricType** | [monitoring/data-models.md](monitoring/data-models.md) | — |
 | **DataSource** | [monitoring/data-models.md](monitoring/data-models.md) | — |
-| **TimeSeriesData** | [monitoring/data-models.md](monitoring/data-models.md) | intraday |
+| ~~TimeSeriesData~~ | *(Prisma-internal, not a concept entity — use RawMetricPoint/MetricDataPoint instead)* | — |
 | **RawMetricPoint** | [monitoring/data-models.md](monitoring/data-models.md) | — |
 | **LiveMonitoringData** | [monitoring/data-models.md](monitoring/data-models.md) | — |
 | **LiveSnapshot** | [monitoring/data-models.md](monitoring/data-models.md) | — |

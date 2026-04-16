@@ -25,6 +25,8 @@
 │ defaultResolutionMinutes?: 15 | 30 | 60 — Default MTU         │
 │ customAttributeDefinitions?: AttributeDefinition[]            │
 │ portfolioSnapshot?       : PortfolioSnapshot                  │
+│   ↑ TypeScript name; Prisma column = "portfolioMap" (Json?)   │
+│   ConfigStore maps portfolioMap → portfolioSnapshot on read   │
 │ createdAt                : string      — ISO timestamp         │
 │ updatedAt                : string      — ISO timestamp         │
 └────────────────────────────────────────────────────────────────┘
@@ -35,7 +37,7 @@
 - `assetMapping` is the root of the entire physical topology — all GCPs and components live here.
 - `defaultResolutionMinutes` defaults to `15` when absent. GCP-level `resolutionMinutes` takes precedence.
 - `portalEnv` determines which Portal base URL the server uses for API calls.
-- `scheduleBapEditable` defaults to `true` when absent — the BAP grid is editable.
+- `scheduleBapEditable` defaults to `false` (Prisma `@default(false)`) — BAP grid is read-only until explicitly enabled in Settings. Note: client UI uses `?? true` fallback for backward compatibility with pre-migration profiles.
 - `monitoringCredentials` are encrypted at rest in `db.json` (AES-256). Never logged.
 - `customAttributeDefinitions` extends the system-seeded attribute definitions for GCPs/components.
 

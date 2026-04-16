@@ -95,8 +95,8 @@
 ┌──────────────────────────────────────────────────────────────────┐
 │ GcpComponent.bessParams  (optional)                              │
 ├──────────────────────────────────────────────────────────────────┤
-│ (same fields as BatteryCore)                                     │
-│ batteryCapacityMwh    : number                                   │
+│ (similar to BatteryCore but different field name)                 │
+│ capacityMwh           : number                                   │
 │ maxDischargePowerMw   : number                                   │
 │ maxChargePowerMw      : number                                   │
 │ chargeEfficiency      : number  — ratio 0–1                      │
