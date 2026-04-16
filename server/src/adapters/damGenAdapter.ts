@@ -55,13 +55,13 @@ export class DamGenAdapter {
         source: 'dam-gen-csv',
       });
 
-      // Generation Forecast
+      // Generation Forecast — CSV stores as negative, invert to positive for internal use
       points.push({
         entityType: 'COMPANY',
         entityId,
         seriesKey: 'generation_forecast',
         deliveryStart,
-        value: row.generationForecast,
+        value: row.generationForecast * -1,
         source: 'dam-gen-csv',
       });
     }
