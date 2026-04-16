@@ -1,6 +1,6 @@
 # schedule/ — Data Models
 
-> **Part of**: [schedule/](./README.md) · **Lines**: ~185 · **Last updated**: 2026-04-15
+> **Part of**: [schedule/](./README.md) · **Lines**: ~230 · **Last updated**: 2026-04-15
 
 ## Entities
 
@@ -88,6 +88,8 @@
 - `slots` keys are `Delivery_Start` ISO strings from `ScheduleRow`.
 - Each slot value is an array of revisions — appended on every ingest that changes that slot.
 - Stored in `db.json` under the group's schedule store.
+
+> **Note:** `ScheduleRevisionStore` is an in-memory/application-level structure. Individual slot revisions are persisted to PostgreSQL as the `ScheduleRevision` Prisma model.
 
 ---
 

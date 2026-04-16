@@ -37,7 +37,7 @@ See [data-models.md](./data-models.md) for full field schemas.
 | `source` field | `'ftp'` for automated FTP reads, `'user_save'` for manual saves from the BAP grid. |
 | `scheduleBapEditable` | `GroupProfile` flag. When `false`, the BAP grid is read-only and save-to-FTP is disabled. |
 | Default pattern | `Battery_Schedule_{GCP_ID}.csv`. Used when `GcpComponent.scheduleFilePattern` is not set. |
-| Polling interval | Default 300 seconds (`SCHEDULE_POLLING_INTERVAL_SECONDS = 30` is a base constant; actual interval comes from `GroupProfile.polling.scheduleIntervalSeconds`). |
+| Polling interval | Default: 300 seconds (from `PollingConfig.scheduleIntervalSeconds`). |
 
 ## When to Read Which File
 

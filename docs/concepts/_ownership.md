@@ -26,19 +26,38 @@
 | **DataSource** | [monitoring/data-models.md](monitoring/data-models.md) | — |
 | ~~TimeSeriesData~~ | *(Prisma-internal, not a concept entity — use RawMetricPoint/MetricDataPoint instead)* | — |
 | **RawMetricPoint** | [monitoring/data-models.md](monitoring/data-models.md) | — |
+| **MetricDataPoint** | [monitoring/data-models.md](monitoring/data-models.md) | schedule, forecast, intraday |
+| **PowerComponent** | [monitoring/data-models.md](monitoring/data-models.md) | — |
 | **LiveMonitoringData** | [monitoring/data-models.md](monitoring/data-models.md) | — |
 | **LiveSnapshot** | [monitoring/data-models.md](monitoring/data-models.md) | — |
+| **BessGcpInfo** | [asset-topology/data-models.md](asset-topology/data-models.md) | — |
 | **ScheduleRow** | [schedule/data-models.md](schedule/data-models.md) | — |
-| **ScheduleRevision** | [schedule/data-models.md](schedule/data-models.md) | — |
+| **ScheduleRevisionStore** | [schedule/data-models.md](schedule/data-models.md) | — |
+| **ScheduleSlotRevision** | [schedule/data-models.md](schedule/data-models.md) | — |
+| *(note)* | Prisma model `ScheduleRevision` is the DB storage form of `ScheduleSlotRevision` | — |
 | **ParsedSchedule** | [schedule/data-models.md](schedule/data-models.md) | — |
+| **ScheduleData** | [schedule/data-models.md](schedule/data-models.md) | — |
+| **ScheduleHistoryData** | [schedule/data-models.md](schedule/data-models.md) | — |
+| **ScheduleChartData** | [schedule/data-models.md](schedule/data-models.md) | — |
+| **ScheduleFileContext** | [schedule/data-models.md](schedule/data-models.md) | — |
 | **ForecastRequest** | [forecast/data-models.md](forecast/data-models.md) | — |
 | **ForecastResponse** | [forecast/data-models.md](forecast/data-models.md) | — |
+| **ForecastPredictionEntry** | [forecast/data-models.md](forecast/data-models.md) | — |
+| **ForecastSubmissionRequest** | [forecast/data-models.md](forecast/data-models.md) | — |
+| **ForecastSubmissionUnit** | [forecast/data-models.md](forecast/data-models.md) | — |
+| **ForecastSubmissionPrediction** | [forecast/data-models.md](forecast/data-models.md) | — |
+| **ForecastSubmissionResponse** | [forecast/data-models.md](forecast/data-models.md) | — |
+| **ForecastSeriesItem** | [forecast/data-models.md](forecast/data-models.md) | — |
+| **MultiBatteryTechParams** | [battery-params/data-models.md](battery-params/data-models.md) | — |
 | **IntradayTransaction** | [intraday/data-models.md](intraday/data-models.md) | — |
 | **EntityTimeSeries** | [intraday/data-models.md](intraday/data-models.md) | monitoring |
 | **FileSource** | [file-ingestion/data-models.md](file-ingestion/data-models.md) | schedule, battery-params |
 | **FileVersion** | [file-ingestion/data-models.md](file-ingestion/data-models.md) | — |
 | **PortfolioMapping** | [portfolio/data-models.md](portfolio/data-models.md) | intraday |
 | **PortfolioEntry** | [portfolio/data-models.md](portfolio/data-models.md) | — |
+| **PortalEntityUnit** | [portfolio/data-models.md](portfolio/data-models.md) | — |
+| **PortfolioSnapshot** | [portfolio/data-models.md](portfolio/data-models.md) | profile |
+| **PortfolioUnitRef** | [portfolio/data-models.md](portfolio/data-models.md) | — |
 
 ## Ownership Rules
 

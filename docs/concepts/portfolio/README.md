@@ -18,6 +18,7 @@ Portfolio types are extensible: currently `DAM` (Day-Ahead Market), with `IDM` (
 | `PortfolioEntry` | Read-only portal portfolio descriptor. Fetched from Portal API for Settings UI. Not persisted. |
 | `PortalEntityUnit` | A portal plant/unit (unitNo, type, names). Part of PortfolioSnapshot. Not persisted. |
 | `PortfolioSnapshot` | Full portal portfolio state at fetch time: entityUnits + portfolios + timestamp. Not persisted. |
+| `PortfolioUnitRef` | Lightweight reference to a portal unit within a portfolio (unitNo, name). Part of PortfolioEntry. Not persisted. |
 
 See [data-models.md](./data-models.md) for full field schemas.
 
