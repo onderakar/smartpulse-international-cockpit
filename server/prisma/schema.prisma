@@ -195,7 +195,7 @@ model EntityTimeSeries {
 model IntradayTransaction {
   id               Int      @id @default(autoincrement())
   groupId          String
-  remoteTradeId    String                  // SmartPulse unique trade ID — dedup key
+  remoteTradeId    String                  // SmartPulse trade ID (not unique — same trade can have multiple revisions)
   companyId        Int
   companyName      String
   deliveryStart    DateTime
@@ -209,6 +209,7 @@ model IntradayTransaction {
   productType      String?
   status           Int       @default(0)
   revisionNo       Int       @default(1)
+  isLatestRevision Boolean   @default(true) // Only latest revision per (contract, deliveryStart) is valid
   username         String?
   explanation      String?
   platformCode     String?
@@ -219,11 +220,19 @@ model IntradayTransaction {
   smp              Float?
   smartbotId       Int?
   alertName        String?
+  libraryName      String?
+  downBalancingPrice Float?
+  upBalancingPrice   Float?
+  innerProductType   Int?
+  initialDate      DateTime?
+  orderDate        DateTime?
+  initialUserId    Int?
   createdAt        DateTime  @default(now())
 
-  @@unique([groupId, remoteTradeId])          // dedup: same trade never stored twice
   @@index([groupId, companyId, deliveryStart]) // company + date queries
   @@index([groupId, deliveryStart])            // date range queries
+  @@index([groupId, companyId, isLatestRevision, deliveryStart]) // latest-only queries
+  @@index([groupId, remoteTradeId])            // lookup by trade ID
 }
 
 // ── Gap Detection ──
